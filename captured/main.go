@@ -1,12 +1,11 @@
 package main
 
 import (
-	"flag"
 	"fmt"
+	"os"
 
-	"github.com/TUM-Dev/captureagent/captured/gstreamer"
-
-	"k8s.io/klog"
+	"github.com/go-gst/go-glib/glib"
+	"github.com/go-gst/go-gst/gst"
 )
 
 // daemon is the main service of captured
@@ -18,45 +17,76 @@ type daemon struct {
 // unrefs all unmanaged objects
 // daemon must not be used after calling unref()
 func (d *daemon) unref() {
-	d.daemonState.pipeline.Unref()
-	d.daemonState.loop.Unref()
 }
 
 // daemonState contains all the state of the daemon
 // A copy of it may be requested for consumers
 type daemonState struct {
-	// glib main loop for installing signal handlers
-	loop *gstreamer.Loop
-	// the main AV pipeline for capturing, processing, and
-	// distributing audio and video streams
-	pipeline *gstreamer.Pipeline
-	// the GStreamer pipeline description
-	description string
+}
+
+func videoSourceTestBin() (*gst.Bin, error) {
+	bin, err := gst.NewBinFromString("videotestsrc ! capsfilter name=capsfilter caps=video/x-raw,width=1920,height=1080,framerate=30/1", true)
+	if err != nil {
+		return nil, err
+	}
+
+	return bin, nil
+}
+
+func runPipeline(mainLoop *glib.MainLoop) error {
+	gst.Init(&os.Args)
+
+	videoSourceBin, err := videoSourceTestBin()
+	if err != nil {
+		return err
+	}
+
+	pipeline, err := gst.NewPipeline("pipeline")
+	if err != nil {
+		return err
+	}
+
+	sink, err := gst.NewElement("autovideosink")
+	if err != nil {
+		return err
+	}
+
+	pipeline.Add(videoSourceBin.Element)
+	pipeline.Add(sink)
+
+	videoSourceBin.Link(sink)
+
+	pipeline.GetBus().AddWatch(func(msg *gst.Message) bool {
+		switch msg.Type() {
+		case gst.MessageEOS: // When end-of-stream is received stop the main loop
+			pipeline.BlockSetState(gst.StateNull)
+			mainLoop.Quit()
+		case gst.MessageError: // Error messages are always fatal
+			err := msg.ParseError()
+			fmt.Println("ERROR:", err.Error())
+			if debug := err.DebugString(); debug != "" {
+				fmt.Println("DEBUG:", debug)
+			}
+			mainLoop.Quit()
+		default:
+			// All messages implement a Stringer. However, this is
+			// typically an expensive thing to do and should be avoided.
+			fmt.Println(msg)
+		}
+		return true
+	})
+
+	// Start the pipeline
+	pipeline.SetState(gst.StatePlaying)
+
+	// Block on the main loop
+	return mainLoop.RunError()
 }
 
 func main() {
-	d := daemon{}
+	mainLoop := glib.NewMainLoop(glib.MainContextDefault(), false)
 
-	flag.StringVar(&d.daemonState.description, "pipeline_description", "",
-		"The complete GStreamer pipeline description for the media pipeline")
-	flag.Parse()
-
-	if d.description == "" {
-		klog.Exitf("Please supply a pipeline description of the AV pipeline")
+	if err := runPipeline(mainLoop); err != nil {
+		fmt.Println("ERROR!", err)
 	}
-
-	// setup up daemon
-	var err error
-	d.daemonState.pipeline, err = gstreamer.NewPipeline("videotestsrc ! autovideosink")
-	if err != nil {
-		fmt.Printf("Error creating pipeline %v\n", err)
-		return
-	}
-
-	d.daemonState.loop = gstreamer.NewLoop()
-
-	// Run the glib main loop
-	d.loop.Run()
-
-	d.unref()
 }

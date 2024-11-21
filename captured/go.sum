@@ -1,3 +1,8 @@
-github.com/go-logr/logr v0.1.0/go.mod h1:ixOQHD9gLJUVQQ2ZOR7zLEifBX6tGkNJF4QyIY7sIas=
-k8s.io/klog v1.0.0 h1:Pt+yjF5aB1xDSVbau4VsWe+dQNzA0qv1LlXdC2dF6Q8=
-k8s.io/klog v1.0.0/go.mod h1:4Bi6QPql/J/LkTDqv7R/cd3hPo4k2DG6Ptcz060Ez5I=
+github.com/go-gst/go-glib v1.4.0 h1:FB2uVfB0uqz7/M6EaDdWWlBZRQpvFAbWfL7drdw8lAE=
+github.com/go-gst/go-glib v1.4.0/go.mod h1:GUIpWmkxQ1/eL+FYSjKpLDyTZx6Vgd9nNXt8dA31d5M=
+github.com/go-gst/go-gst v1.4.0 h1:EikB43u4c3wc8d2RzlFRSfIGIXYzDy6Zls2vJqrG2BU=
+github.com/go-gst/go-gst v1.4.0/go.mod h1:p8TLGtOxJLcrp6PCkTPdnanwWBxPZvYiHDbuSuwgO3c=
+github.com/mattn/go-pointer v0.0.1 h1:n+XhsuGeVO6MEAp7xyEukFINEa+Quek5psIR/ylA6o0=
+github.com/mattn/go-pointer v0.0.1/go.mod h1:2zXcozF6qYGgmsG+SeTZz3oAbFLdD3OWqnUbNvJZAlc=
+golang.org/x/exp v0.0.0-20240909161429-701f63a606c0 h1:e66Fs6Z+fZTbFBAxKfP3PALWBtpfqks2bwGcexMxgtk=
+golang.org/x/exp v0.0.0-20240909161429-701f63a606c0/go.mod h1:2TbTHSBQa924w8M6Xs1QcRcFwyucIwBGpK1p2f1YFFY=
