@@ -10,64 +10,38 @@ import (
 
 // daemon is the main service of captured
 type daemon struct {
-	//mu sync.RWMutex
 	daemonState
 }
 
-// unrefs all unmanaged objects
-// daemon must not be used after calling unref()
-func (d *daemon) unref() {
-}
-
 // daemonState contains all the state of the daemon
-// A copy of it may be requested for consumers
 type daemonState struct {
+	pipeline *pipeline
+	mainloop *glib.MainLoop
 }
 
-func videoSourceTestBin() (*gst.Bin, error) {
-	bin, err := gst.NewBinFromString("videotestsrc ! capsfilter name=capsfilter caps=video/x-raw,width=1920,height=1080,framerate=30/1", true)
-	if err != nil {
-		return nil, err
-	}
-
-	return bin, nil
-}
-
-func runPipeline(mainLoop *glib.MainLoop) error {
+func (d *daemon) runPipeline() error {
 	gst.Init(&os.Args)
 
-	videoSourceBin, err := videoSourceTestBin()
+	var err error
+	d.pipeline, err = newPipeline()
 	if err != nil {
 		return err
 	}
 
-	pipeline, err := gst.NewPipeline("pipeline")
-	if err != nil {
-		return err
-	}
+	p := d.pipeline.pipeline
 
-	sink, err := gst.NewElement("autovideosink")
-	if err != nil {
-		return err
-	}
-
-	pipeline.Add(videoSourceBin.Element)
-	pipeline.Add(sink)
-
-	videoSourceBin.Link(sink)
-
-	pipeline.GetBus().AddWatch(func(msg *gst.Message) bool {
+	p.GetBus().AddWatch(func(msg *gst.Message) bool {
 		switch msg.Type() {
 		case gst.MessageEOS: // When end-of-stream is received stop the main loop
-			pipeline.BlockSetState(gst.StateNull)
-			mainLoop.Quit()
+			p.BlockSetState(gst.StateNull)
+			d.mainloop.Quit()
 		case gst.MessageError: // Error messages are always fatal
 			err := msg.ParseError()
 			fmt.Println("ERROR:", err.Error())
 			if debug := err.DebugString(); debug != "" {
 				fmt.Println("DEBUG:", debug)
 			}
-			mainLoop.Quit()
+			d.mainloop.Quit()
 		default:
 			// All messages implement a Stringer. However, this is
 			// typically an expensive thing to do and should be avoided.
@@ -77,16 +51,18 @@ func runPipeline(mainLoop *glib.MainLoop) error {
 	})
 
 	// Start the pipeline
-	pipeline.SetState(gst.StatePlaying)
+	p.SetState(gst.StatePlaying)
 
 	// Block on the main loop
-	return mainLoop.RunError()
+	return d.mainloop.RunError()
 }
 
 func main() {
-	mainLoop := glib.NewMainLoop(glib.MainContextDefault(), false)
+	d := &daemon{}
 
-	if err := runPipeline(mainLoop); err != nil {
+	d.mainloop = glib.NewMainLoop(glib.MainContextDefault(), false)
+
+	if err := d.runPipeline(); err != nil {
 		fmt.Println("ERROR!", err)
 	}
 }
