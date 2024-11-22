@@ -78,25 +78,7 @@ func (d *daemon) runPipeline() error {
 
 	p := d.pipeline.pipeline
 
-	p.GetBus().AddWatch(func(msg *gst.Message) bool {
-		switch msg.Type() {
-		case gst.MessageEOS: // When end-of-stream is received stop the main loop
-			p.BlockSetState(gst.StateNull)
-			d.mainloop.Quit()
-		case gst.MessageError: // Error messages are always fatal
-			err := msg.ParseError()
-			fmt.Println("ERROR:", err.Error())
-			if debug := err.DebugString(); debug != "" {
-				fmt.Println("DEBUG:", debug)
-			}
-			d.mainloop.Quit()
-		default:
-			// All messages implement a Stringer. However, this is
-			// typically an expensive thing to do and should be avoided.
-			fmt.Println(msg)
-		}
-		return true
-	})
+	d.registerBusWatch()
 
 	// Start the pipeline
 	p.SetState(gst.StatePlaying)

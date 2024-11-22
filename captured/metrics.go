@@ -10,6 +10,7 @@ import (
 
 type metrics struct {
 	compSinkStats srtStats
+	pipelineStats pipelineStats // Updated by bus watch on main thread
 	cpu           systemstat.CPUSample
 	mem           systemstat.MemSample
 	loadAvg       systemstat.LoadAvgSample
