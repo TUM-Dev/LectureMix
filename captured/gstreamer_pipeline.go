@@ -72,7 +72,7 @@ func newPipeline() (*pipeline, error) {
 	}
 
 	// TODO(hugo): Move into custom bin constructor function with config struct
-	p.srtCompositorSink, err = gst.NewBinFromString("srtsink name=srtsink uri=srt://:8888 wait-for-connection=false", true)
+	p.srtCompositorSink, err = gst.NewBinFromString("srtsink name=srtsink uri=srt://:8888 wait-for-connection=true", true)
 	if err != nil {
 		return nil, err
 	}
