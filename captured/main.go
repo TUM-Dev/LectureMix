@@ -1,15 +1,22 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"sync"
 
 	"github.com/go-gst/go-glib/glib"
 	"github.com/go-gst/go-gst/gst"
+	"k8s.io/klog"
 )
 
 // daemon is the main service of captured
 type daemon struct {
+	// mu guards the state below.
+	mu sync.RWMutex
 	daemonState
 }
 
@@ -17,6 +24,37 @@ type daemon struct {
 type daemonState struct {
 	pipeline *pipeline
 	mainloop *glib.MainLoop
+	metrics  metrics
+}
+
+// daemonController provides a small interface for the HTTP server
+type daemonController interface {
+	metricsSnapshot() metrics
+	srtCompSinkStats() (*srtStats, error)
+}
+
+func (d *daemon) metricsSnapshot() metrics {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.metrics
+}
+
+func (d *daemon) srtCompSinkStats() (*srtStats, error) {
+	d.mu.Lock()
+	sink := d.pipeline.srtCompositorSink
+	d.mu.Unlock()
+
+	// GStreamer elements are thread-safe
+	val, err := sink.GetProperty("stats")
+	if err != nil {
+		return nil, err
+	}
+
+	if s, ok := val.(*gst.Structure); ok != false {
+		return nil, errors.New("'stats' value is not '*gst.Structure'")
+	} else {
+		return newSRTStatsFromStructure(s)
+	}
 }
 
 func (d *daemon) runPipeline() error {
@@ -61,6 +99,22 @@ func main() {
 	d := &daemon{}
 
 	d.mainloop = glib.NewMainLoop(glib.MainContextDefault(), false)
+
+	// TODO(hugo): ctx is currently useless as we have the pesky gmainloop
+	// floating around
+	go d.metricsProcess(context.TODO())
+
+	// Create and start HTTP server
+	h := &httpServer{d}
+	h.setupHTTPHandlers()
+
+	addr := ":8080"
+	klog.Infof("listening for HTTP at %s", addr)
+	go func() {
+		if err := http.ListenAndServe(addr, nil); err != nil {
+			klog.Errorf("HTTP listen failed: %v", err)
+		}
+	}()
 
 	if err := d.runPipeline(); err != nil {
 		fmt.Println("ERROR!", err)
