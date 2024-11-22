@@ -11,7 +11,8 @@ var capsStereo48Khz = audioCapsFilter{Mimetype: "audio/x-raw", Channels: 2, Rate
 
 // pipeline is the main AV processing pipeline
 type pipeline struct {
-	pipeline *gst.Pipeline
+	constructed bool
+	pipeline    *gst.Pipeline
 
 	camSrc            *gst.Bin
 	presentSrc        *gst.Bin
@@ -71,7 +72,7 @@ func newPipeline() (*pipeline, error) {
 	}
 
 	// TODO(hugo): Move into custom bin constructor function with config struct
-	p.srtCompositorSink, err = gst.NewBinFromString("srtsink uri=srt://:8888 wait-for-connection=false", true)
+	p.srtCompositorSink, err = gst.NewBinFromString("srtsink name=srtsink uri=srt://:8888 wait-for-connection=false", true)
 	if err != nil {
 		return nil, err
 	}
@@ -101,6 +102,8 @@ func newPipeline() (*pipeline, error) {
 	p.compositor.Link(p.muxerCompositor.Element)
 	p.audioSrc.Link(p.muxerCompositor.Element)
 	p.muxerCompositor.Link(p.srtCompositorSink.Element)
+
+	p.constructed = true
 
 	return p, nil
 }

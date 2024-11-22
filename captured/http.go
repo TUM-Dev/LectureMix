@@ -16,33 +16,33 @@ func (h *httpServer) metrics(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "# HELP linux_proc_user Time spent in user mode, in ticks\n")
 	fmt.Fprintf(w, "# TYPE linux_proc_user gauge\n")
-	fmt.Fprintf(w, "linux_proc_user %f\n", float64(m.cpu.User))
+	fmt.Fprintf(w, "linux_proc_user %f\n", float32(m.cpu.User))
 
 	fmt.Fprintf(w, "# HELP linux_proc_system Time spent in system mode, in ticks\n")
 	fmt.Fprintf(w, "# TYPE linux_proc_system gauge\n")
-	fmt.Fprintf(w, "linux_proc_system %f\n", float64(m.cpu.System))
+	fmt.Fprintf(w, "linux_proc_system %f\n", float32(m.cpu.System))
 
 	fmt.Fprintf(w, "# HELP linux_proc_iowait Time spent waiting for I/O to complete, in ticks\n")
 	fmt.Fprintf(w, "# TYPE linux_proc_iowait gauge\n")
-	fmt.Fprintf(w, "linux_proc_iowait %f\n", float64(m.cpu.Iowait))
+	fmt.Fprintf(w, "linux_proc_iowait %f\n", float32(m.cpu.Iowait))
 
 	fmt.Fprintf(w, "# HELP linux_proc_irq Time spent servicing interrupts, in ticks\n")
 	fmt.Fprintf(w, "# TYPE linux_proc_irq gauge\n")
-	fmt.Fprintf(w, "linux_proc_irq %f\n", float64(m.cpu.Irq))
+	fmt.Fprintf(w, "linux_proc_irq %f\n", float32(m.cpu.Irq))
 
 	fmt.Fprintf(w, "# HELP linux_proc_softirq Time spent servicing soft interrupts, in ticks\n")
 	fmt.Fprintf(w, "# TYPE linux_proc_softirq gauge\n")
-	fmt.Fprintf(w, "linux_proc_softirq %f\n", float64(m.cpu.SoftIrq))
+	fmt.Fprintf(w, "linux_proc_softirq %f\n", float32(m.cpu.SoftIrq))
 
 	/* Memory */
 
 	fmt.Fprintf(w, "# HELP linux_mem_used Amount of memory used, in kB\n")
 	fmt.Fprintf(w, "# TYPE linux_mem_used gauge\n")
-	fmt.Fprintf(w, "linux_mem_used %f\n", float64(m.mem.MemUsed))
+	fmt.Fprintf(w, "linux_mem_used %f\n", float32(m.mem.MemUsed))
 
 	fmt.Fprintf(w, "# HELP linux_mem_free Amount of free memory, in kB\n")
 	fmt.Fprintf(w, "# TYPE linux_mem_free gauge\n")
-	fmt.Fprintf(w, "linux_mem_free %f\n", float64(m.mem.MemFree))
+	fmt.Fprintf(w, "linux_mem_free %f\n", float32(m.mem.MemFree))
 
 	/* Load Average */
 
@@ -59,6 +59,11 @@ func (h *httpServer) metrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "# TYPE load_avg_fifteen gauge\n")
 	fmt.Fprintf(w, "load_avg_fifteen %f %d\n", m.loadAvg.Fifteen, loadAvgTime)
 
+	/* GStreamer */
+
+	fmt.Fprintf(w, "# HELP gst_srt_comb_callers Current number of subscribers to the SRT (combined) stream\n")
+	fmt.Fprintf(w, "# TYPE gst_srt_comb_callers gauge\n")
+	fmt.Fprintf(w, "gst_srt_comb_callers %f\n", float32(len(m.compSinkStats.callers)))
 }
 
 func (h *httpServer) setupHTTPHandlers() {

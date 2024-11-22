@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"bitbucket.org/bertimus9/systemstat"
+	"k8s.io/klog"
 )
 
 type metrics struct {
@@ -24,18 +25,17 @@ func (d *daemon) metricsProcess(ctx context.Context) {
 			mem := systemstat.GetMemSample()
 			loadAvg := systemstat.GetLoadAvgSample()
 
-			/*
-				srtCompStats, err := d.srtCompSinkStats()
-				if err != nil {
-					klog.Warningf("failed to retrieve statistics from srtsink serving compositor stream: %v", err)
-				}
-			*/
+			srtCompStats, err := d.srtCompSinkStats()
+			if err != nil {
+				klog.Warningf("failed to retrieve statistics from srtsink serving compositor stream: %v", err)
+				continue
+			}
 
 			d.mu.Lock()
 			d.metrics.cpu = cpu
 			d.metrics.mem = mem
 			d.metrics.loadAvg = loadAvg
-			//d.metrics.compSinkStats = *srtCompStats
+			d.metrics.compSinkStats = *srtCompStats
 			d.mu.Unlock()
 
 			time.Sleep(time.Second * 1)

@@ -42,19 +42,29 @@ func (d *daemon) metricsSnapshot() metrics {
 func (d *daemon) srtCompSinkStats() (*srtStats, error) {
 	d.mu.Lock()
 	sink := d.pipeline.srtCompositorSink
+	constructed := d.pipeline.constructed
 	d.mu.Unlock()
 
+	if constructed != true {
+		return nil, errors.New("pipeline not constructed")
+	}
+
 	// GStreamer elements are thread-safe
-	val, err := sink.GetProperty("stats")
+	elem, err := sink.GetElementByName("srtsink")
+	if err != nil {
+		return nil, err
+	}
+	val, err := elem.GetProperty("stats")
 	if err != nil {
 		return nil, err
 	}
 
-	if s, ok := val.(*gst.Structure); ok != false {
+	s, ok := val.(*gst.Structure)
+	if ok != true {
 		return nil, errors.New("'stats' value is not '*gst.Structure'")
-	} else {
-		return newSRTStatsFromStructure(s)
 	}
+
+	return newSRTStatsFromStructure(s)
 }
 
 func (d *daemon) runPipeline() error {
@@ -91,6 +101,10 @@ func (d *daemon) runPipeline() error {
 	// Start the pipeline
 	p.SetState(gst.StatePlaying)
 
+	// TODO(hugo): ctx is currently useless as we have the pesky gmainloop
+	// floating around and move outside runPipeline
+	go d.metricsProcess(context.TODO())
+
 	// Block on the main loop
 	return d.mainloop.RunError()
 }
@@ -99,10 +113,6 @@ func main() {
 	d := &daemon{}
 
 	d.mainloop = glib.NewMainLoop(glib.MainContextDefault(), false)
-
-	// TODO(hugo): ctx is currently useless as we have the pesky gmainloop
-	// floating around
-	go d.metricsProcess(context.TODO())
 
 	// Create and start HTTP server
 	h := &httpServer{d}
@@ -119,4 +129,5 @@ func main() {
 	if err := d.runPipeline(); err != nil {
 		fmt.Println("ERROR!", err)
 	}
+
 }
