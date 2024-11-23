@@ -26,11 +26,13 @@ func (d *daemon) metricsProcess(ctx context.Context) {
 			mem := systemstat.GetMemSample()
 			loadAvg := systemstat.GetLoadAvgSample()
 
-			srtCompStats, err := d.srtCompStats()
+			srtStats, err := d.srtStatistics()
 			if err != nil {
-				klog.Warningf("failed to retrieve statistics from srtsink serving compositor stream: %v", err)
+				klog.Warningf("failed to retrieve statistics from srtsinks: %v", err)
 				continue
 			}
+
+			srtCompStats := srtStats[0]
 
 			d.mu.Lock()
 			d.metrics.cpu = cpu

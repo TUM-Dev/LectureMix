@@ -387,3 +387,15 @@ func newMPEGTSMuxerBin(name string) (*gst.Bin, error) {
 
 	return bin, err
 }
+
+func newSRTSink(name string, address string) (*gst.Bin, error) {
+	srtsinkName := "srtsink_" + name
+	desc := fmt.Sprintf("srtsink name=%s uri=%s wait-for-connection=false", srtsinkName, address)
+	bin, err := gst.NewBinFromString(desc, true)
+	if err != nil {
+		return nil, err
+	}
+	bin.Element.SetProperty("name", name)
+
+	return bin, nil
+}

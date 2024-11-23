@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"net/http"
 	"os"
@@ -63,7 +62,30 @@ type daemonState struct {
 type daemonController interface {
 	metricsSnapshot() metrics
 	graph(details gst.DebugGraphDetails) string
-	srtCompStats() (*srtStats, error)
+	srtStatistics() ([]*srtStats, error)
+}
+
+func (d *daemon) srtStatistics() ([]*srtStats, error) {
+	d.mu.Lock()
+	combBin := d.pipeline.srtCompositorSink
+	presentBin := d.pipeline.srtPresentSink
+	camBin := d.pipeline.srtCamSink
+	d.mu.Unlock()
+
+	combStats, err := getSRTStatistics(combBin)
+	if err != nil {
+		return nil, err
+	}
+	presentStats, err := getSRTStatistics(presentBin)
+	if err != nil {
+		return nil, err
+	}
+	camStats, err := getSRTStatistics(camBin)
+	if err != nil {
+		return nil, err
+	}
+
+	return []*srtStats{combStats, presentStats, camStats}, nil
 }
 
 // get a snapshot of the current metrics
@@ -82,41 +104,11 @@ func (d *daemon) graph(details gst.DebugGraphDetails) string {
 	return p.DebugBinToDotData(details)
 }
 
-// get statistics from the combined stream srtsink
-func (d *daemon) srtCompStats() (*srtStats, error) {
-	d.mu.Lock()
-	sink := d.pipeline.srtCompositorSink
-	constructed := d.pipeline.constructed
-	d.mu.Unlock()
-
-	if constructed != true {
-		return nil, errors.New("pipeline not constructed")
-	}
-
-	// GStreamer elements are thread-safe
-	// TODO(hugo): better way to retrieve element as this is coupled to the naming in gstreamer_bin.go
-	elem, err := sink.GetElementByName("srtsink")
-	if err != nil {
-		return nil, err
-	}
-	val, err := elem.GetProperty("stats")
-	if err != nil {
-		return nil, err
-	}
-
-	s, ok := val.(*gst.Structure)
-	if ok != true {
-		return nil, errors.New("'stats' value is not '*gst.Structure'")
-	}
-
-	return newSRTStatsFromStructure(s)
-}
-
 func (d *daemon) runPipeline() error {
 	gst.Init(&os.Args)
 
 	var err error
-	d.pipeline, err = newPipeline(d.hwAccel)
+	d.pipeline, err = newPipeline(d.hwAccel, &d.daemonConfig)
 	if err != nil {
 		return err
 	}

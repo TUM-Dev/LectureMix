@@ -1,6 +1,10 @@
 package main
 
-import "github.com/go-gst/go-gst/gst"
+import (
+	"errors"
+
+	"github.com/go-gst/go-gst/gst"
+)
 
 var hz30 = rational{30, 1}
 var caps1920x1080p30 = videoCapsFilter{Mimetype: "video/x-raw", Width: 1920, Height: 1080, Framerate: hz30}
@@ -45,7 +49,27 @@ type pipeline struct {
 	audioCaps audioCapsFilter
 }
 
-func newPipeline(hwAccel bool) (*pipeline, error) {
+// get statistics from the combined stream srtsink
+func getSRTStatistics(srtBin *gst.Bin) (*srtStats, error) {
+	sinkName := srtBin.GetName()
+	elem, err := srtBin.GetElementByName("srtsink_" + sinkName)
+	if err != nil {
+		return nil, err
+	}
+	val, err := elem.GetProperty("stats")
+	if err != nil {
+		return nil, err
+	}
+
+	s, ok := val.(*gst.Structure)
+	if ok != true {
+		return nil, errors.New("'stats' value is not '*gst.Structure'")
+	}
+
+	return newSRTStatsFromStructure(s)
+}
+
+func newPipeline(hwAccel bool, d *daemonConfig) (*pipeline, error) {
 	p := &pipeline{}
 
 	p.outputCaps = caps1920x1080p30
@@ -90,23 +114,21 @@ func newPipeline(hwAccel bool) (*pipeline, error) {
 	if err != nil {
 		return nil, err
 	}
-	// TODO(hugo): Move into custom bin constructor function with config struct
-	p.srtPresentSink, err = gst.NewBinFromString("srtsink uri=srt://:8886 wait-for-connection=false", true)
+	p.srtPresentSink, err = newSRTSink("sink_present", d.listenPresentSRT)
 	if err != nil {
 		return nil, err
 	}
-	p.srtPresentSink.Element.SetProperty("name", "srt_present")
+	p.srtPresentSink.Element.SetProperty("name", "sink_present")
 
 	p.muxerCam, err = newMPEGTSMuxerBin("muxer_cam")
 	if err != nil {
 		return nil, err
 	}
-	// TODO(hugo): Move into custom bin constructor function with config struct
-	p.srtCamSink, err = gst.NewBinFromString("srtsink uri=srt://:8884 wait-for-connection=false", true)
+	p.srtCamSink, err = newSRTSink("sink_cam", d.listenCamSRT)
 	if err != nil {
 		return nil, err
 	}
-	p.srtCamSink.Element.SetProperty("name", "srt_cam")
+	p.srtCamSink.Element.SetProperty("name", "sink_cam")
 
 	// Scaling and compositng on GPU results in a big load reduction
 	// on the CPU.
@@ -130,15 +152,12 @@ func newPipeline(hwAccel bool) (*pipeline, error) {
 		return nil, err
 	}
 
-	// TODO(hugo): Move into custom bin constructor function with config struct
-	p.srtCompositorSink, err = gst.NewBinFromString("srtsink name=srtsink uri=srt://:8888 wait-for-connection=false", true)
+	p.srtCompositorSink, err = newSRTSink("sink_combined", d.listenCombSRT)
 	if err != nil {
 		return nil, err
 	}
-	p.srtCompositorSink.Element.SetProperty("name", "srt_combined")
 
 	// Create main pipelines and link bins
-
 	p.pipeline, err = gst.NewPipeline("Pipeline")
 	if err != nil {
 		return nil, err
