@@ -86,7 +86,7 @@ func newPipeline(hwAccel bool) (*pipeline, error) {
 		return nil, err
 	}
 
-	p.muxerPresent, err = newMPEGTSMuxerBin()
+	p.muxerPresent, err = newMPEGTSMuxerBin("muxer_present")
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func newPipeline(hwAccel bool) (*pipeline, error) {
 		return nil, err
 	}
 
-	p.muxerCam, err = newMPEGTSMuxerBin()
+	p.muxerCam, err = newMPEGTSMuxerBin("muxer_cam")
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func newPipeline(hwAccel bool) (*pipeline, error) {
 		p.presentCompCaps.Mimetype = "video/x-raw(memory:VAMemory)"
 		p.camCompCaps.Mimetype = "video/x-raw(memory:VAMemory)"
 	}
-	p.compositor, err = newCompositorBin(combinedViewConfig{
+	p.compositor, err = newCompositorBin("compositor", combinedViewConfig{
 		OutputCaps:       p.outputCaps,
 		PresentationCaps: p.presentCompCaps,
 		CameraCaps:       p.camCompCaps,
@@ -123,7 +123,7 @@ func newPipeline(hwAccel bool) (*pipeline, error) {
 		return nil, err
 	}
 
-	p.muxerCompositor, err = newMPEGTSMuxerBin()
+	p.muxerCompositor, err = newMPEGTSMuxerBin("muxer_comp")
 	if err != nil {
 		return nil, err
 	}

@@ -198,36 +198,72 @@ func createGhostPadWithPad(pad *gst.Pad, ghostPad string, bin *gst.Bin) error {
 	return nil
 }
 
-func newCompositorBin(config combinedViewConfig) (*gst.Bin, error) {
+func newCompositorBin(name string, config combinedViewConfig) (*gst.Bin, error) {
 	sink1_xpos := config.OutputCaps.Width - config.CameraCaps.Width
 
+	// switch to VA-API elements when hardware acceleration is enabled
 	comp := "compositor background=black"
+	compName := "compositor_" + name
 	scaler := "videoconvertscale"
+	scalerSink0Name := "videoconvertscale_sink_0_" + name
+	scalerSink1Name := "videoconvertscale_sink_1_" + name
 	if config.HwAccel {
 		comp = "vacompositor"
+		compName = "vacompositor_" + name
 		scaler = "vapostproc"
+		scalerSink0Name = "vapostproc_sink_0_" + name
+		scalerSink1Name = "vapostproc_sink_1_" + name
 	}
 
-	// TODO(hugo): add autoincrementing names to avoid a naming conflict in case we have multiple combined views
-	comp_desc := fmt.Sprintf("%s name=comp sink_1::xpos=%d ! capsfilter name=capsfilter_compositor caps=%s", comp, sink1_xpos, config.OutputCaps.string())
-	sink0_desc := fmt.Sprintf("queue name=sink0_queue_compositor ! %s add-borders=1 ! capsfilter caps=%s ! comp.sink_0", scaler, config.PresentationCaps.string())
-	sink1_desc := fmt.Sprintf("queue name=sink1_queue_compositor ! %s add-borders=1 ! capsfilter caps=%s ! comp.sink_1", scaler, config.CameraCaps.string())
+	capsfilterName := "capsfilter_" + name
+	queueSink0Name := "queue_sink_0_" + name
+	queueSink1Name := "queue_sink_1_" + name
+	capsfilterSink0Name := "capsfilter_sink_0_" + name
+	capsfilterSink1Name := "capsfilter_sink_1_" + name
+
+	comp_desc := fmt.Sprintf(
+		"%s name=%s sink_1::xpos=%d ! capsfilter name=%s caps=%s",
+		comp,
+		compName,
+		sink1_xpos,
+		capsfilterName,
+		config.OutputCaps.string(),
+	)
+	sink0_desc := fmt.Sprintf(
+		"queue name=%s ! %s name=%s add-borders=1 ! capsfilter name=%s caps=%s ! %s.sink_0",
+		queueSink0Name,
+		scaler,
+		scalerSink0Name,
+		capsfilterSink0Name,
+		config.PresentationCaps.string(),
+		compName,
+	)
+	sink1_desc := fmt.Sprintf(
+		"queue name=%s ! %s name=%s add-borders=1 ! capsfilter name=%s caps=%s ! %s.sink_1",
+		queueSink1Name,
+		scaler,
+		scalerSink1Name,
+		capsfilterSink1Name,
+		config.CameraCaps.string(),
+		compName,
+	)
 
 	// Do not automatically create Ghostpads, as sink ghost-pads are not configured correctly.
 	bin, err := gst.NewBinFromString(comp_desc+" "+sink0_desc+" "+sink1_desc, false)
 	if err != nil {
 		return nil, err
 	}
+	bin.Element.SetProperty("name", name)
 
-	err = createGhostPad("sink0_queue_compositor", "sink", "sink0", bin)
+	err = createGhostPad(queueSink0Name, "sink", "sink0", bin)
 	if err != nil {
 		return nil, err
 	}
-	err = createGhostPad("sink1_queue_compositor", "sink", "sink1", bin)
+	err = createGhostPad(queueSink1Name, "sink", "sink1", bin)
 	if err != nil {
 		return nil, err
 	}
-	err = createGhostPad("capsfilter_compositor", "src", "src", bin)
+	err = createGhostPad(capsfilterName, "src", "src", bin)
 	if err != nil {
 		return nil, err
 	}
@@ -317,27 +353,31 @@ func new1x3SplitterBin(name string) (*gst.Bin, error) {
 	return bin, nil
 }
 
-func newMPEGTSMuxerBin() (*gst.Bin, error) {
-	mux_desc := "mpegtsmux name=mux"
-	// TODO(hugo): we might want to move the encoders into seperate bins
-	// TODO(hugo): check if we need to create a thread boundry with a queue between encoders and muxer
-	audio_queue_desc := "queue name=audio_queue_mux ! avenc_aac ! mux."
-	video_queue_desc := "queue name=video_queue_mux ! x264enc ! mux."
+func newMPEGTSMuxerBin(name string) (*gst.Bin, error) {
+	audioQueueName := "queue_audio_" + name
+	videoQueueName := "queue_video_" + name
+	aacEncName := "avenc_aac_" + name
+	h264EncName := "x264enc_" + name
+	muxName := "mpegtsmux_" + name
+	muxDesc := "mpegtsmux name=" + muxName
+	audioQueueDesc := fmt.Sprintf("queue name=%s ! avenc_aac name=%s ! %s.", audioQueueName, aacEncName, muxName)
+	videoQueueDesc := fmt.Sprintf("queue name=%s ! x264enc name=%s ! %s.", videoQueueName, h264EncName, muxName)
 
-	bin, err := gst.NewBinFromString(mux_desc+" "+audio_queue_desc+" "+video_queue_desc, false)
+	bin, err := gst.NewBinFromString(muxDesc+" "+audioQueueDesc+" "+videoQueueDesc, false)
 	if err != nil {
 		return nil, err
 	}
+	bin.Element.SetProperty("name", name)
 
-	err = createGhostPad("audio_queue_mux", "sink", "audio_sink", bin)
+	err = createGhostPad(audioQueueName, "sink", "audio_sink", bin)
 	if err != nil {
 		return nil, err
 	}
-	err = createGhostPad("video_queue_mux", "sink", "video_sink", bin)
+	err = createGhostPad(videoQueueName, "sink", "video_sink", bin)
 	if err != nil {
 		return nil, err
 	}
-	err = createGhostPad("mux", "src", "src", bin)
+	err = createGhostPad(muxName, "src", "src", bin)
 	if err != nil {
 		return nil, err
 	}
