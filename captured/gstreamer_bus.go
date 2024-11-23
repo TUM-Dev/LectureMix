@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/go-gst/go-gst/gst"
@@ -30,11 +29,7 @@ func (d *daemon) registerBusWatch() bool {
 			d.mainloop.Quit()
 		case gst.MessageError: // Error messages are always fatal
 			err := msg.ParseError()
-			fmt.Println("ERROR:", err.Error())
-			if debug := err.DebugString(); debug != "" {
-				klog.Info("DEBUG:", debug)
-			}
-			d.mainloop.Quit()
+			klog.Fatalf("received an error message on pipeline bus: %v", err)
 		case gst.MessageWarning:
 			d.mu.Lock()
 			d.metrics.pipelineStats.warnings += 1
