@@ -156,11 +156,6 @@ func (h *httpServer) metrics(w http.ResponseWriter, r *http.Request) {
 
 	/* GStreamer Statistics */
 
-	// Minimum Pipeline Latency
-	fmt.Fprintf(w, "# HELP gst_min_latency Minimum pipeline latency in ms\n")
-	fmt.Fprintf(w, "# TYPE gst_min_latency gauge\n")
-	fmt.Fprintf(w, "gst_min_latency %d\n", m.pipelineStats.minLatency.Milliseconds())
-
 	for k, v := range m.pipelineStats.qosEvents {
 		fmt.Fprintf(w, "# HELP gst_qos_events Number of qos events\n")
 		fmt.Fprintf(w, "# TYPE gst_qos_events gauge\n")
