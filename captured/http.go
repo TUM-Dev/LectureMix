@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/go-gst/go-gst/gst"
 )
 
 type httpServer struct {
@@ -85,74 +87,127 @@ func (h *httpServer) metrics(w http.ResponseWriter, r *http.Request) {
 		common := fmt.Sprintf("caller=\"%d\"", i)
 
 		// Send Rate
-		fmt.Fprintf(w, "# HELP srt_send_rate Send rate in Mbps")
+		fmt.Fprintf(w, "# HELP srt_send_rate Send rate in Mbps\n")
 		fmt.Fprintf(w, "# TYPE srt_send_rate gauge\n")
 		fmt.Fprintf(w, "srt_send_rate{%s} %f %d\n", common, caller.sendRateMbps, srtTime)
 
 		// Bandwidth
-		fmt.Fprintf(w, "# HELP srt_bandwidth Bandwidth in Mbps")
+		fmt.Fprintf(w, "# HELP srt_bandwidth Bandwidth in Mbps\n")
 		fmt.Fprintf(w, "# TYPE srt_bandwidth gauge\n")
 		fmt.Fprintf(w, "srt_bandwidth{%s} %f %d\n", common, caller.bandwidthMbps, srtTime)
 
 		// Round-trip time (RTT)
-		fmt.Fprintf(w, "# HELP srt_rtt RTT in ms")
+		fmt.Fprintf(w, "# HELP srt_rtt RTT in ms\n")
 		fmt.Fprintf(w, "# TYPE srt_rtt gauge\n")
 		fmt.Fprintf(w, "srt_rtt{%s} %f %d\n", common, caller.rttMS, srtTime)
 
 		// Negotiated Latency
-		fmt.Fprintf(w, "# HELP srt_negotiated_latency Negotiated latency in ms")
+		fmt.Fprintf(w, "# HELP srt_negotiated_latency Negotiated latency in ms\n")
 		fmt.Fprintf(w, "# TYPE srt_negotiated_latency gauge\n")
 		fmt.Fprintf(w, "srt_negotiated_latency{%s} %d %d\n", common, caller.negotiatedLatencyMS, srtTime)
 
 		// Bytes sent
-		fmt.Fprintf(w, "# HELP srt_bytes_sent Total bytes sent")
+		fmt.Fprintf(w, "# HELP srt_bytes_sent Total bytes sent\n")
 		fmt.Fprintf(w, "# TYPE srt_bytes_sent gauge\n")
 		fmt.Fprintf(w, "srt_bytes_sent{%s} %d %d\n", common, caller.bytesSent, srtTime)
 
 		// Bytes Retransmitted
-		fmt.Fprintf(w, "# HELP srt_bytes_retransmitted Total bytes retransmitted")
+		fmt.Fprintf(w, "# HELP srt_bytes_retransmitted Total bytes retransmitted\n")
 		fmt.Fprintf(w, "# TYPE srt_bytes_retransmitted gauge\n")
 		fmt.Fprintf(w, "srt_bytes_retransmitted{%s} %d %d\n", common, caller.bytesRetransmitted, srtTime)
 
 		// Bytes Sent Dropped
-		fmt.Fprintf(w, "# HELP srt_bytes_send_dropped Total bytes retransmitted")
+		fmt.Fprintf(w, "# HELP srt_bytes_send_dropped Total bytes retransmitted\n")
 		fmt.Fprintf(w, "# TYPE srt_bytes_send_dropped gauge\n")
 		fmt.Fprintf(w, "srt_bytes_send_dropped{%s} %d %d\n", common, caller.bytesSentDropped, srtTime)
 
 		// Packets sent
-		fmt.Fprintf(w, "# HELP srt_packets_sent Total packets sent")
+		fmt.Fprintf(w, "# HELP srt_packets_sent Total packets sent\n")
 		fmt.Fprintf(w, "# TYPE srt_packets_sent gauge\n")
 		fmt.Fprintf(w, "srt_packets_sent{%s} %d %d\n", common, caller.packetsSent, srtTime)
 
 		// Packets Sent Lost
-		fmt.Fprintf(w, "# HELP srt_packets_sent_lost Total packets lost")
+		fmt.Fprintf(w, "# HELP srt_packets_sent_lost Total packets lost\n")
 		fmt.Fprintf(w, "# TYPE srt_packets_sent_lost gauge\n")
 		fmt.Fprintf(w, "srt_packets_sent_lost{%s} %d %d\n", common, caller.packetsSentLost, srtTime)
 
 		// Packets Sent Dropped
-		fmt.Fprintf(w, "# HELP srt_packets_sent_dropped Total packets dropped")
+		fmt.Fprintf(w, "# HELP srt_packets_sent_dropped Total packets dropped\n")
 		fmt.Fprintf(w, "# TYPE srt_packets_sent_dropped gauge\n")
 		fmt.Fprintf(w, "srt_packets_sent_dropped{%s} %d %d\n", common, caller.packetsSentDropped, srtTime)
 
 		// Packets Retransmitted
-		fmt.Fprintf(w, "# HELP srt_packets_retransmitted Total packets retransmitted")
+		fmt.Fprintf(w, "# HELP srt_packets_retransmitted Total packets retransmitted\n")
 		fmt.Fprintf(w, "# TYPE srt_packets_retransmitted gauge\n")
 		fmt.Fprintf(w, "srt_packets_retransmitted{%s} %d %d\n", common, caller.packetsRetransmitted, srtTime)
 
 		// Packets Ack Received
-		fmt.Fprintf(w, "# HELP srt_packets_ack_received Number of acks received")
+		fmt.Fprintf(w, "# HELP srt_packets_ack_received Number of acks received\n")
 		fmt.Fprintf(w, "# TYPE srt_packets_ack_received gauge\n")
 		fmt.Fprintf(w, "srt_packets_ack_received{%s} %d %d\n", common, caller.packetAckReceived, srtTime)
 
 		// Packets Nack Received
-		fmt.Fprintf(w, "# HELP srt_packets_nack_received Number of nacks received")
+		fmt.Fprintf(w, "# HELP srt_packets_nack_received Number of nacks received\n")
 		fmt.Fprintf(w, "# TYPE srt_packets_nack_received gauge\n")
 		fmt.Fprintf(w, "srt_packets_nack_received{%s} %d %d\n", common, caller.packetNackReceived, srtTime)
 
 		// TODO(hugo): Add receive metrics from 'srtCallerStats'?
 	}
+
+	/* GStreamer Statistics */
+
+	// Minimum Pipeline Latency
+	fmt.Fprintf(w, "# HELP gst_min_latency Minimum pipeline latency in ms\n")
+	fmt.Fprintf(w, "# TYPE gst_min_latency gauge\n")
+	fmt.Fprintf(w, "gst_min_latency %d\n", m.pipelineStats.minLatency.Milliseconds())
+
+	for k, v := range m.pipelineStats.qosEvents {
+		fmt.Fprintf(w, "# HELP gst_qos_events Number of qos events\n")
+		fmt.Fprintf(w, "# TYPE gst_qos_events gauge\n")
+		fmt.Fprintf(w, "gst_qos_events{source=\"%s\"} %d\n", k, v)
+	}
+}
+
+const (
+	graphDetailMediaType        = "media-type"
+	graphDetailCaps             = "caps"
+	graphDetailNonDefaultParams = "non-default-params"
+	graphDetailStates           = "states"
+	graphDetailFullParams       = "full-params"
+	graphDetailAll              = "all"
+	graphDetailVerbose          = "verbose"
+)
+
+func (h *httpServer) graph(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	val := q.Get("details")
+
+	var details gst.DebugGraphDetails
+	switch val {
+	case graphDetailMediaType:
+		details = gst.DebugGraphShowMediaType
+	case graphDetailCaps:
+		details = gst.DebugGraphShowCapsDetails
+	case graphDetailNonDefaultParams:
+		details = gst.DebugGraphShowNonDefaultParams
+	case graphDetailStates:
+		details = gst.DebugGraphShowStates
+	case graphDetailFullParams:
+		details = gst.DebugGraphShowPullParams
+	case graphDetailAll:
+		details = gst.DebugGraphShowAll
+	case graphDetailVerbose:
+		details = gst.DebugGraphShowVerbose
+	default:
+		details = gst.DebugGraphShowStates
+	}
+
+	dot := h.daemonController.graph(details)
+	w.Write([]byte(dot))
+	w.Header().Add("Content-Type", "text/vnd.graphviz")
 }
 
 func (h *httpServer) setupHTTPHandlers() {
 	http.HandleFunc("/metrics", h.metrics)
+	http.HandleFunc("/graph", h.graph)
 }

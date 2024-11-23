@@ -30,13 +30,22 @@ type daemonState struct {
 // daemonController provides a small interface for the HTTP server
 type daemonController interface {
 	metricsSnapshot() metrics
-	srtCompSinkStats() (*srtStats, error)
+	graph(details gst.DebugGraphDetails) string
+	srtCompSinkStats() (*srtStats, error) // TODO: rename
 }
 
 func (d *daemon) metricsSnapshot() metrics {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.metrics
+}
+
+func (d *daemon) graph(details gst.DebugGraphDetails) string {
+	d.mu.Lock()
+	p := d.pipeline.pipeline
+	d.mu.Unlock()
+
+	return p.DebugBinToDotData(details)
 }
 
 func (d *daemon) srtCompSinkStats() (*srtStats, error) {
@@ -78,6 +87,7 @@ func (d *daemon) runPipeline() error {
 
 	p := d.pipeline.pipeline
 
+	d.metrics.pipelineStats = newPipelineStats()
 	d.registerBusWatch()
 
 	// Start the pipeline
