@@ -361,6 +361,9 @@ func newMPEGTSMuxerBin(name string) (*gst.Bin, error) {
 	muxName := "mpegtsmux_" + name
 	muxDesc := "mpegtsmux name=" + muxName
 	audioQueueDesc := fmt.Sprintf("queue name=%s ! avenc_aac name=%s ! %s.", audioQueueName, aacEncName, muxName)
+	// FIXME(hugo): changing to vah264enc results in h264 probing errors. It seems like vah264enc is not setting
+	// the correct codec metadata in the capabilities
+	// Check if this is still the case in GStreamer upstream, and file a bug
 	videoQueueDesc := fmt.Sprintf("queue name=%s ! x264enc name=%s ! %s.", videoQueueName, h264EncName, muxName)
 
 	bin, err := gst.NewBinFromString(muxDesc+" "+audioQueueDesc+" "+videoQueueDesc, false)
