@@ -1,15 +1,10 @@
 package main
 
-// #cgo pkg-config: glib-2.0
-// #include <glib-object.h>
-import "C"
-
 import (
 	"fmt"
 	"time"
 	"unsafe"
 
-	"github.com/go-gst/go-glib/glib"
 	"github.com/go-gst/go-gst/gst"
 )
 
@@ -76,25 +71,6 @@ type srtCallerStats struct {
 	// callerAddress net.IP
 }
 
-// GValueArray is sadly not in go-glib and I am to lazy to upstream it
-func convertGValueArray(valueArray *C.GValueArray) ([]interface{}, error) {
-	nValues := int(valueArray.n_values)
-	values := valueArray.values // Pointer to the array of C.GValue
-	cSlice := unsafe.Slice(values, nValues)
-
-	// Map the C.GValue slice to glib.Value slice
-	goSlice := make([]interface{}, nValues)
-	var err error
-	for i, cVal := range cSlice {
-		goSlice[i], err = glib.ValueFromNative(unsafe.Pointer(&cVal)).GoValue()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return goSlice, nil
-}
-
 // Retrieve value from name and convert it to the correct time (known at compile time)
 func valueTo[T any](s *gst.Structure, name string, dest *T) error {
 	obj, err := s.GetValue(name)
@@ -146,7 +122,7 @@ func newSRTStatsFromStructure(s *gst.Structure) (*srtStats, error) {
 		return stats, nil
 	}
 
-	arr, err := convertGValueArray((*C.GValueArray)(ptr))
+	arr, err := convertGValueArray(ptr)
 	if err != nil {
 		return nil, err
 	}

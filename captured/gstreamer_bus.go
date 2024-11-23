@@ -2,14 +2,22 @@ package main
 
 import (
 	"fmt"
-	"sync/atomic"
+	"time"
 
 	"github.com/go-gst/go-gst/gst"
+	"k8s.io/klog"
 )
 
 type pipelineStats struct {
-	warnings  atomic.Uint64
-	qosEvents atomic.Uint64
+	warnings   uint64
+	qosEvents  map[string]uint64 // key is the name of the element
+	minLatency time.Duration
+}
+
+func newPipelineStats() pipelineStats {
+	return pipelineStats{
+		qosEvents: make(map[string]uint64),
+	}
 }
 
 func (d *daemon) registerBusWatch() bool {
@@ -24,23 +32,30 @@ func (d *daemon) registerBusWatch() bool {
 			err := msg.ParseError()
 			fmt.Println("ERROR:", err.Error())
 			if debug := err.DebugString(); debug != "" {
-				fmt.Println("DEBUG:", debug)
+				klog.Info("DEBUG:", debug)
 			}
 			d.mainloop.Quit()
 		case gst.MessageWarning:
-			d.metrics.pipelineStats.warnings.Add(1)
+			d.mu.Lock()
+			d.metrics.pipelineStats.warnings += 1
+			d.mu.Unlock()
 		// When buffers arrive late in the sink, i.e. when their running-time is
 		// smaller than that of the clock, we have a QoS problem
 		// https://gstreamer.freedesktop.org/documentation/plugin-development/advanced/qos.html?gi-language=c
 		//
 		// A useful statistic to have when monitoring the pipeline
 		case gst.MessageQoS:
-			d.metrics.pipelineStats.qosEvents.Add(1)
-			_ = msg.ParseQoS()
+			source := msg.Source()
+
+			d.mu.Lock()
+			d.metrics.pipelineStats.qosEvents[source] += 1
+			d.mu.Unlock()
+
+			klog.Warning(msg)
 		default:
 			// All messages implement a Stringer. However, this is
 			// typically an expensive thing to do and should be avoided.
-			fmt.Println(msg)
+			klog.Info(msg)
 		}
 		return true
 	})
