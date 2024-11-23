@@ -25,6 +25,7 @@ type daemonState struct {
 	pipeline *pipeline
 	mainloop *glib.MainLoop
 	metrics  metrics
+	hwAccel  bool
 }
 
 // daemonController provides a small interface for the HTTP server
@@ -76,11 +77,11 @@ func (d *daemon) srtCompSinkStats() (*srtStats, error) {
 	return newSRTStatsFromStructure(s)
 }
 
-func (d *daemon) runPipeline() error {
+func (d *daemon) runPipeline(hwAccel bool) error {
 	gst.Init(&os.Args)
 
 	var err error
-	d.pipeline, err = newPipeline()
+	d.pipeline, err = newPipeline(hwAccel)
 	if err != nil {
 		return err
 	}
@@ -105,6 +106,7 @@ func main() {
 	d := &daemon{}
 
 	d.mainloop = glib.NewMainLoop(glib.MainContextDefault(), false)
+	d.hwAccel = true
 
 	// Create and start HTTP server
 	h := &httpServer{d}
@@ -118,7 +120,7 @@ func main() {
 		}
 	}()
 
-	if err := d.runPipeline(); err != nil {
+	if err := d.runPipeline(d.hwAccel); err != nil {
 		fmt.Println("ERROR!", err)
 	}
 

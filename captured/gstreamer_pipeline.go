@@ -32,15 +32,16 @@ type pipeline struct {
 	audioCaps audioCapsFilter
 }
 
-func newPipeline() (*pipeline, error) {
+func newPipeline(hwAccel bool) (*pipeline, error) {
 	p := &pipeline{}
 
 	p.outputCaps = caps1920x1080p30
 	p.presentSrcCaps = caps1920x1080p30
 	p.camSrcCaps = caps1920x1080p30
-	p.presentCompCaps = caps1440x810p30
-	p.camCompCaps = caps480x270p30
 	p.audioCaps = capsStereo48Khz
+
+	p.camCompCaps = caps480x270p30
+	p.presentCompCaps = caps1440x810p30
 
 	var err error
 
@@ -57,10 +58,18 @@ func newPipeline() (*pipeline, error) {
 		return nil, err
 	}
 
-	p.compositor, err = newCombinedViewBin(combinedViewConfig{
+	// Scaling and compositng on GPU results in a big load reduction
+	// on the CPU.
+	// Keep buffers in VRAM between postproc and compositor
+	if hwAccel {
+		p.presentCompCaps.Mimetype = "video/x-raw(memory:VAMemory)"
+		p.camCompCaps.Mimetype = "video/x-raw(memory:VAMemory)"
+	}
+	p.compositor, err = newCompositorBin(combinedViewConfig{
 		OutputCaps:       p.outputCaps,
 		PresentationCaps: p.presentCompCaps,
 		CameraCaps:       p.camCompCaps,
+		HwAccel:          hwAccel,
 	})
 	if err != nil {
 		return nil, err

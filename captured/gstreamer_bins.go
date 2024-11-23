@@ -55,7 +55,7 @@ type videoCapsFilter struct {
 // Returns a description of the VideoCapsFilter instance that can be used in a
 // pipeline description.
 func (c *videoCapsFilter) string() string {
-	return fmt.Sprintf("%s,width=%d,height=%d,framerate=%d/%d", c.Mimetype, c.Width, c.Height, c.Framerate.Nominator, c.Framerate.Denominator)
+	return fmt.Sprintf("\"%s,width=%d,height=%d,framerate=%d/%d\"", c.Mimetype, c.Width, c.Height, c.Framerate.Nominator, c.Framerate.Denominator)
 }
 
 // An audioCapsFilter enforces limitation of formats in the process of linking pads.
@@ -110,6 +110,7 @@ type combinedViewConfig struct {
 	OutputCaps       videoCapsFilter
 	CameraCaps       videoCapsFilter
 	PresentationCaps videoCapsFilter
+	HwAccel          bool
 }
 
 func createGhostPad(elementName string, elementPad string, ghostPad string, bin *gst.Bin) error {
@@ -140,13 +141,20 @@ func createGhostPad(elementName string, elementPad string, ghostPad string, bin 
 	return nil
 }
 
-func newCombinedViewBin(config combinedViewConfig) (*gst.Bin, error) {
+func newCompositorBin(config combinedViewConfig) (*gst.Bin, error) {
 	sink1_xpos := config.OutputCaps.Width - config.CameraCaps.Width
 
+	comp := "compositor background=black"
+	scaler := "videoconvertscale"
+	if config.HwAccel {
+		comp = "vacompositor"
+		scaler = "vapostproc"
+	}
+
 	// TODO(hugo): add autoincrementing names to avoid a naming conflict in case we have multiple combined views
-	comp_desc := fmt.Sprintf("compositor name=comp sink_1::xpos=%d background=black ! capsfilter name=capsfilter_compositor caps=%s", sink1_xpos, config.OutputCaps.string())
-	sink0_desc := fmt.Sprintf("queue name=sink0_queue_compositor ! videoconvertscale add-borders=1 ! capsfilter caps=%s ! comp.sink_0", config.PresentationCaps.string())
-	sink1_desc := fmt.Sprintf("queue name=sink1_queue_compositor ! videoconvertscale add-borders=1 ! capsfilter caps=%s ! comp.sink_1", config.CameraCaps.string())
+	comp_desc := fmt.Sprintf("%s name=comp sink_1::xpos=%d ! capsfilter name=capsfilter_compositor caps=%s", comp, sink1_xpos, config.OutputCaps.string())
+	sink0_desc := fmt.Sprintf("queue name=sink0_queue_compositor ! %s add-borders=1 ! capsfilter caps=%s ! comp.sink_0", scaler, config.PresentationCaps.string())
+	sink1_desc := fmt.Sprintf("queue name=sink1_queue_compositor ! %s add-borders=1 ! capsfilter caps=%s ! comp.sink_1", scaler, config.CameraCaps.string())
 
 	// Do not automatically create Ghostpads, as sink ghost-pads are not configured correctly.
 	bin, err := gst.NewBinFromString(comp_desc+" "+sink0_desc+" "+sink1_desc, false)
