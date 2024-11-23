@@ -84,15 +84,22 @@ func newPipeline(hwAccel bool, d *daemonConfig) (*pipeline, error) {
 
 	// TODO(hugo): to much redundancy here. find a way to reduce err checking boilerplate
 
-	p.camSrc, err = newVideoTestSourceBin("present", videoPatternSMPTE, p.camSrcCaps)
+	p.camSrc, err = newSourceBin("cam", d.sourceCam, d.sourceCamOpts, p.camSrcCaps)
 	if err != nil {
 		return nil, err
 	}
-	p.presentSrc, err = newVideoTestSourceBin("cam", videoPatternSMPTE, p.presentSrcCaps)
+	p.presentSrc, err = newSourceBin("present", d.sourcePresent, d.sourcePresentOpts, p.presentSrcCaps)
 	if err != nil {
 		return nil, err
 	}
-	p.audioSrc, err = newAudioTestSourceBin("master", p.audioCaps)
+
+	switch d.sourceAudio {
+	case "audiotestsrc":
+		p.audioSrc, err = newAudioTestSourceBin("master", p.audioCaps)
+	case "alsasrc":
+		p.audioSrc, err = newALSASourceBin("master", d.sourceAudioOpts, p.audioCaps)
+
+	}
 	if err != nil {
 		return nil, err
 	}

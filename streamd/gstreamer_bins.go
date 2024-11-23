@@ -77,6 +77,21 @@ func (c *audioCapsFilter) string() string {
 	return fmt.Sprintf("%s,channels=%d,rate=%d", c.Mimetype, c.Channels, c.Rate)
 }
 
+func newSourceBin(name string, factory string, properties string, caps videoCapsFilter) (*gst.Bin, error) {
+	// TODO(hugo): Consider constructing the bin manually
+	desc := fmt.Sprintf("%s name=%s_%s %s ! capsfilter name=capsfilter_%s caps=%s", factory, factory, name, properties, name, caps.string())
+
+	// Automatically create ghost-pads for all unlinked pads. In this case this
+	// is the capsfilter sink pad.
+	bin, err := gst.NewBinFromString(desc, true)
+	if err != nil {
+		return nil, err
+	}
+	bin.Element.SetProperty("name", name)
+
+	return bin, nil
+}
+
 // Creates a VideoTestSourceBin with a single sink ghost-pad
 func newVideoTestSourceBin(name string, pattern videoPattern, caps videoCapsFilter) (*gst.Bin, error) {
 	desc := fmt.Sprintf("videotestsrc name=videotestsrc_%s pattern=%d ! capsfilter name=capsfilter_%s caps=%s", name, pattern, name, caps.string())
@@ -125,7 +140,7 @@ func newAudioTestSourceBin(name string, caps audioCapsFilter) (*gst.Bin, error) 
 	return bin, err
 }
 
-func newALSASourceBin(name string, device string, caps audioCapsFilter) (*gst.Bin, error) {
+func newALSASourceBin(name string, opts string, caps audioCapsFilter) (*gst.Bin, error) {
 	alsasrcName := "alsasrc_" + name
 	queue0Name := "queue0_" + name
 	audioconvertName := "audioconvert_" + name
@@ -136,9 +151,9 @@ func newALSASourceBin(name string, device string, caps audioCapsFilter) (*gst.Bi
 
 	// Isolating conversion, resampling, and timestamping to a new thread is necessary.
 	// Leaving out one queue results in clock problems.
-	desc := fmt.Sprintf("alsasrc name=%s device=%s ! queue name=%s ! audioconvert name=%s ! audioresample name=%s ! audiorate name=%s ! capsfilter name=%s caps=%s ! queue name=%s",
+	desc := fmt.Sprintf("alsasrc name=%s %s ! queue name=%s ! audioconvert name=%s ! audioresample name=%s ! audiorate name=%s ! capsfilter name=%s caps=%s ! queue name=%s",
 		alsasrcName,
-		device,
+		opts,
 		queue0Name,
 		audioconvertName,
 		audioresampleName,
