@@ -50,12 +50,18 @@ type videoCapsFilter struct {
 	Width     int
 	Height    int
 	Framerate rational
+	Other     string
 }
 
 // Returns a description of the VideoCapsFilter instance that can be used in a
 // pipeline description.
 func (c *videoCapsFilter) string() string {
-	return fmt.Sprintf("\"%s,width=%d,height=%d,framerate=%d/%d\"", c.Mimetype, c.Width, c.Height, c.Framerate.Nominator, c.Framerate.Denominator)
+	str := fmt.Sprintf("\"%s,width=%d,height=%d,framerate=%d/%d", c.Mimetype, c.Width, c.Height, c.Framerate.Nominator, c.Framerate.Denominator)
+	if c.Other != "" {
+		str = str + "," + c.Other
+	}
+
+	return str + "\""
 }
 
 // An audioCapsFilter enforces limitation of formats in the process of linking pads.
@@ -72,37 +78,80 @@ func (c *audioCapsFilter) string() string {
 }
 
 // Creates a VideoTestSourceBin with a single sink ghost-pad
-func newVideoTestSourceBin(pattern videoPattern, caps videoCapsFilter) (*gst.Bin, error) {
-	desc := fmt.Sprintf("videotestsrc pattern=%d ! capsfilter caps=%s", pattern, caps.string())
+func newVideoTestSourceBin(name string, pattern videoPattern, caps videoCapsFilter) (*gst.Bin, error) {
+	desc := fmt.Sprintf("videotestsrc name=videotestsrc_%s pattern=%d ! capsfilter name=capsfilter_%s caps=%s", name, pattern, name, caps.string())
 
 	// Automatically create ghost-pads for all unlinked pads. In this case this
 	// is the capsfilter sink pad.
 	bin, err := gst.NewBinFromString(desc, true)
-	return bin, err
+	if err != nil {
+		return nil, err
+	}
+	bin.Element.SetProperty("name", name)
+
+	return bin, nil
 }
 
 // Creates a V4L2SourceBin with a single sink ghost-pad
-func newV4L2SourceBin(device string, caps videoCapsFilter) (*gst.Bin, error) {
-	desc := fmt.Sprintf("v4l2src device=%s ! videoconvertscale ! capsfilter caps=%s", device, caps.string())
+func newV4L2SourceBin(name string, device string, caps videoCapsFilter) (*gst.Bin, error) {
+	desc := fmt.Sprintf(
+		"v4l2src name=v4l2src_%s device=%s ! videoconvertscale name=videoconvertscale_%s ! capsfilter name=capsfilter_%s caps=%s",
+		name,
+		device,
+		name,
+		name,
+		caps.string(),
+	)
 	bin, err := gst.NewBinFromString(desc, true)
+	bin.Element.SetProperty("name", name)
 	return bin, err
 }
 
 // Creates an AudioTestSourceBin with a single sink ghost-pad
-func newAudioTestSourceBin(caps audioCapsFilter) (*gst.Bin, error) {
-	desc := fmt.Sprintf("audiotestsrc ! capsfilter caps=%s", caps.string())
+func newAudioTestSourceBin(name string, caps audioCapsFilter) (*gst.Bin, error) {
+	desc := fmt.Sprintf("audiotestsrc name=audiotestsrc_%s ! capsfilter name=capsfilter_%s caps=%s",
+		name,
+		name,
+		caps.string(),
+	)
 
 	// Automatically create ghost-pads for all unlinked pads. In this case this
 	// is the capsfilter sink pad.
 	bin, err := gst.NewBinFromString(desc, true)
+	if err != nil {
+		return nil, err
+	}
+	bin.Element.SetProperty("name", name)
 	return bin, err
 }
 
-func newALSASourceBin(device string, caps audioCapsFilter) (*gst.Bin, error) {
+func newALSASourceBin(name string, device string, caps audioCapsFilter) (*gst.Bin, error) {
+	alsasrcName := "alsasrc_" + name
+	queue0Name := "queue0_" + name
+	audioconvertName := "audioconvert_" + name
+	audioresampleName := "audioresample_" + name
+	audiorateName := "audiorate_" + name
+	capsfilterName := "capsfilter_" + name
+	queue1Name := "queue1_" + name
+
 	// Isolating conversion, resampling, and timestamping to a new thread is necessary.
 	// Leaving out one queue results in clock problems.
-	desc := fmt.Sprintf("alsasrc device=%s ! queue ! audioconvert ! audioresample ! audiorate ! capsfilter caps=%s ! queue ", device, caps.string())
+	desc := fmt.Sprintf("alsasrc name=%s device=%s ! queue name=%s ! audioconvert name=%s ! audioresample name=%s ! audiorate name=%s ! capsfilter name=%s caps=%s ! queue name=%s",
+		alsasrcName,
+		device,
+		queue0Name,
+		audioconvertName,
+		audioresampleName,
+		audiorateName,
+		capsfilterName,
+		caps.string(),
+		queue1Name,
+	)
 	bin, err := gst.NewBinFromString(desc, true)
+	if err != nil {
+		return nil, err
+	}
+	bin.Element.SetProperty("name", name)
 	return bin, err
 }
 
@@ -120,12 +169,20 @@ func createGhostPad(elementName string, elementPad string, ghostPad string, bin 
 		return err
 	}
 
+	return createGhostPadWithElement(element, elementPad, ghostPad, bin)
+}
+
+func createGhostPadWithElement(element *gst.Element, elementPad string, ghostPad string, bin *gst.Bin) error {
 	static_pad := element.GetStaticPad(elementPad)
 	if static_pad == nil {
-		return fmt.Errorf("failed to get static pad '%s' from '%s' element", elementPad, elementName)
+		return fmt.Errorf("failed to get static pad '%s' from '%s' element", elementPad, element.GetName())
 	}
 
-	ghost_pad := gst.NewGhostPad(ghostPad, static_pad)
+	return createGhostPadWithPad(static_pad, ghostPad, bin)
+}
+
+func createGhostPadWithPad(pad *gst.Pad, ghostPad string, bin *gst.Bin) error {
+	ghost_pad := gst.NewGhostPad(ghostPad, pad)
 	if ghost_pad == nil {
 		return fmt.Errorf("unable to create ghost pad '%s'", ghostPad)
 	}
@@ -176,6 +233,88 @@ func newCompositorBin(config combinedViewConfig) (*gst.Bin, error) {
 	}
 
 	return bin, err
+}
+
+func new1x2SplitterBin(name string) (*gst.Bin, error) {
+	bin := gst.NewBin(name)
+	if bin == nil {
+		return nil, fmt.Errorf("cannot create bin '%s'", name)
+	}
+
+	teeName := "tee_" + name
+	tee, err := gst.NewElementWithName("tee", teeName)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = bin.Add(tee); err != nil {
+		return nil, err
+	}
+
+	src0 := tee.GetRequestPad("src_0")
+	src1 := tee.GetRequestPad("src_1")
+	if src0 == nil || src1 == nil {
+		return nil, fmt.Errorf("failed to request 'src_0' or 'src_1' pad from '%s'", teeName)
+	}
+
+	err = createGhostPadWithElement(tee, "sink", "sink", bin)
+	if err != nil {
+		return nil, err
+	}
+	err = createGhostPadWithPad(src0, "src_0", bin)
+	if err != nil {
+		return nil, err
+	}
+	err = createGhostPadWithPad(src1, "src_1", bin)
+	if err != nil {
+		return nil, err
+	}
+
+	return bin, nil
+}
+
+// TODO(hugo): make splitter constructor generic or argument based
+func new1x3SplitterBin(name string) (*gst.Bin, error) {
+	bin := gst.NewBin(name)
+	if bin == nil {
+		return nil, fmt.Errorf("cannot create bin '%s'", name)
+	}
+
+	teeName := "tee_" + name
+	tee, err := gst.NewElementWithName("tee", teeName)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = bin.Add(tee); err != nil {
+		return nil, err
+	}
+
+	src0 := tee.GetRequestPad("src_0")
+	src1 := tee.GetRequestPad("src_1")
+	src2 := tee.GetRequestPad("src_2")
+	if src0 == nil || src1 == nil || src2 == nil {
+		return nil, fmt.Errorf("failed to request 'src_0', 'src_1', 'src_2' pad from '%s'", teeName)
+	}
+
+	err = createGhostPadWithElement(tee, "sink", "sink", bin)
+	if err != nil {
+		return nil, err
+	}
+	err = createGhostPadWithPad(src0, "src_0", bin)
+	if err != nil {
+		return nil, err
+	}
+	err = createGhostPadWithPad(src1, "src_1", bin)
+	if err != nil {
+		return nil, err
+	}
+	err = createGhostPadWithPad(src2, "src_2", bin)
+	if err != nil {
+		return nil, err
+	}
+
+	return bin, nil
 }
 
 func newMPEGTSMuxerBin() (*gst.Bin, error) {
