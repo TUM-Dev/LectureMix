@@ -1,4 +1,4 @@
-module github.com/TUM-Dev/captureagent/captured
+module github.com/TUM-Dev/captureagent/streamd
 
 go 1.23.2
 

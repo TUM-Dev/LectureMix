@@ -95,6 +95,7 @@ func newPipeline(hwAccel bool) (*pipeline, error) {
 	if err != nil {
 		return nil, err
 	}
+	p.srtPresentSink.Element.SetProperty("name", "srt_present")
 
 	p.muxerCam, err = newMPEGTSMuxerBin("muxer_cam")
 	if err != nil {
@@ -105,6 +106,7 @@ func newPipeline(hwAccel bool) (*pipeline, error) {
 	if err != nil {
 		return nil, err
 	}
+	p.srtCamSink.Element.SetProperty("name", "srt_cam")
 
 	// Scaling and compositng on GPU results in a big load reduction
 	// on the CPU.
@@ -133,6 +135,7 @@ func newPipeline(hwAccel bool) (*pipeline, error) {
 	if err != nil {
 		return nil, err
 	}
+	p.srtCompositorSink.Element.SetProperty("name", "srt_combined")
 
 	// Create main pipelines and link bins
 

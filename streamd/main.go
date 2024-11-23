@@ -1,46 +1,3 @@
-/*
-captured: A capture agent for recording and streaming events.
-
-This daemon handles the processing of audio and video streams from multiple sources, enabling real-time streaming and recording. It is designed to run on edge servers, typically in environments such as lecture halls, and uses off-the-shelf hardware for cost efficiency and flexibility.
-
-Usage:
-The following flags configure the captured daemon:
-
-	-listen-http string
-	    Address to listen for HTTP requests. Defaults to ":8080".
-
-	-listen-comb-srt string
-	    SRT URI for receiving the combined stream. Defaults to "srt://[::]:7000?mode=listener".
-
-	-listen-present-srt string
-	    SRT URI for receiving the presentation stream. Defaults to "srt://[::]:7001?mode=listener".
-
-	-listen-cam-srt string
-	    SRT URI for receiving the camera stream. Defaults to "srt://[::]:7002?mode=listener".
-
-	-source-present string
-	    GStreamer factory name for the presentation source. Defaults to "videotestsrc".
-
-	-source-present-opts string
-	    Properties for configuring the presentation source. Defaults to an empty string.
-
-	-source-cam string
-	    GStreamer factory name for the camera source. Defaults to "videotestsrc".
-
-	-source-cam-opts string
-	    Properties for configuring the camera source. Defaults to an empty string.
-
-	-source-audio string
-	    GStreamer factory name for the audio source. Defaults to "audiotestsrc".
-
-	-source-audio-opts string
-	    Properties for configuring the audio source. Defaults to an empty string.
-
-	-hw-accel
-	    Enables hardware acceleration, offloading processing tasks to the GPU or DSP. Defaults to false.
-
-For details on SRT URIs, see: https://github.com/hwangsaeul/libsrt/blob/master/docs/srt-live-transmit.md.
-*/
 package main
 
 import (
@@ -51,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"time"
 
 	"github.com/go-gst/go-glib/glib"
 	"github.com/go-gst/go-gst/gst"
@@ -85,7 +43,7 @@ type daemonConfig struct {
 	hwAccel bool
 }
 
-// daemon is the main service of captured
+// daemon is the main service of streamd
 type daemon struct {
 	daemonConfig
 	// mu guards the state below.
@@ -219,7 +177,8 @@ func main() {
 			return
 		default:
 			// this is essentially what g_main_loop_run does with some locking overhead
-			d.mainloop.GetContext().Iteration(true)
+			d.mainloop.GetContext().Iteration(false)
+			time.Sleep(time.Millisecond * 50)
 		}
 	}
 }
