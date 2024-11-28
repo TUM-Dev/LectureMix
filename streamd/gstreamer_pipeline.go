@@ -11,7 +11,7 @@ var caps1920x1080p30 = videoCapsFilter{Mimetype: "video/x-raw", Width: 1920, Hei
 var caps1440x810p30 = videoCapsFilter{Mimetype: "video/x-raw", Width: 1440, Height: 810, Framerate: hz30}
 var caps480x270p30 = videoCapsFilter{Mimetype: "video/x-raw", Width: 480, Height: 270, Framerate: hz30}
 
-var capsStereo48Khz = audioCapsFilter{Mimetype: "audio/x-raw", Channels: 2, Rate: 48000}
+var capsStereo48Khz = audioCapsFilter{Mimetype: "audio/x-raw", Channels: 2, Rate: 48000, Format: "S16LE"}
 
 // pipeline is the main AV processing pipeline
 type pipeline struct {

@@ -69,12 +69,13 @@ type audioCapsFilter struct {
 	Mimetype string
 	Channels int
 	Rate     int
+	Format 	 string
 }
 
 // Returns a description of the AudioCapsfilter instance that can be used in a
 // pipeline description.
 func (c *audioCapsFilter) string() string {
-	return fmt.Sprintf("%s,channels=%d,rate=%d", c.Mimetype, c.Channels, c.Rate)
+	return fmt.Sprintf("%s,channels=%d,rate=%d,format=%s", c.Mimetype, c.Channels, c.Rate, c.Format)
 }
 
 // Creates a VideoTestSourceBin with a single sink ghost-pad
@@ -183,7 +184,7 @@ func newDecklinkAudioSourceBin(name string, opts string, caps audioCapsFilter) (
 	queue1Name := "queue1_" + name
 
 	desc := fmt.Sprintf(
-		"decklinkaudiosrc name=%s %s ! queue name=%s ! audioconvert name=%s ! capsfilter name=%s caps=%s ! queue name=%s",
+		"decklinkaudiosrc name=%s %s ! queue name=%s ! audioconvert name=%s ! audioresample ! capsfilter name=%s caps=%s ! queue name=%s",
 		decklinkaudiosrcName,
 		opts,
 		queue0Name,
@@ -249,7 +250,7 @@ func newCompositorBin(name string, config combinedViewConfig) (*gst.Bin, error) 
 	// switch to VA-API elements when hardware acceleration is enabled
 	comp := "compositor background=black"
 	compName := "compositor_" + name
-	scaler := "videoconvertscale"
+	scaler := "videoscale"
 	scalerSink0Name := "videoconvertscale_sink_0_" + name
 	scalerSink1Name := "videoconvertscale_sink_1_" + name
 	if config.HwAccel {
@@ -401,17 +402,17 @@ func new1x3SplitterBin(name string) (*gst.Bin, error) {
 func newMPEGTSMuxerBin(name string, h264Bitrate int, aacBitrate int, hwAccel bool) (*gst.Bin, error) {
 	audioQueueName := "queue_audio_" + name
 	videoQueueName := "queue_video_" + name
-	aacEncName := "avenc_aac_" + name
+	aacEncName := "fdkaacenc_" + name
 	muxName := "mpegtsmux_" + name
 	muxDesc := "matroskamux name=" + muxName
 
-	h264enc := "x264enc tune=zerolatency"
+	h264enc := "x264enc tune=zerolatency pass=0" // pass=0 is cbr
 	if hwAccel {
 		h264enc = "vah264enc rate-control=cbr"
 	}
 
 	audioQueueDesc := fmt.Sprintf(
-		"queue name=%s ! avenc_aac name=%s bitrate=%d ! %s.",
+		"queue name=%s ! fdkaacenc name=%s bitrate=%d rate-control=cbr ! %s.",
 		audioQueueName,
 		aacEncName,
 		aacBitrate * 1000,
