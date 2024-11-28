@@ -141,7 +141,7 @@ func main() {
 	flag.StringVar(&d.sourceCamOpts, "source-cam-opts", "", "GStreamer element properties for camera source")
 	flag.StringVar(&d.sourceAudio, "source-audio", "audiotestsrc", "GStreamer element factory name for the audio source")
 	flag.StringVar(&d.sourceAudioOpts, "source-audio-opts", "", "GStreamer element properties for audio source")
-	flag.IntVar(&d.videoEncBitrateKbps, "video-enc-bitrate", 8000, "Video encoding bitrate in Kbps")
+	flag.IntVar(&d.videoEncBitrateKbps, "video-enc-bitrate", 6000, "Video encoding bitrate in Kbps")
 	flag.IntVar(&d.audioEncBitrateKbps, "audio-enc-bitrate", 96, "Video encoding bitrate in Kbps")
 	flag.BoolVar(&d.hwAccel, "hw-accel", false, "Enable hardware acceleration and offload processing tasks onto the GPU or a DSP")
 	flag.Parse()
