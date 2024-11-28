@@ -27,7 +27,9 @@ buildGoModule {
     
   # GStreamer loads the decklink library via dlopen. We thus need to patch the ld library path
   postInstall = ''
-    wrapProgram $out/bin/streamd --prefix LD_LIBRARY_PATH : ${blackmagic-desktop-video}/lib
+    wrapProgram $out/bin/streamd \
+      --prefix LD_LIBRARY_PATH : ${blackmagic-desktop-video}/lib \
+      --prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "$GST_PLUGIN_SYSTEM_PATH_1_0"
   '';
 
   nativeBuildInputs = [ pkg-config gcc makeWrapper ];
