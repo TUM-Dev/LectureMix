@@ -69,7 +69,7 @@ func getSRTStatistics(srtBin *gst.Bin) (*srtStats, error) {
 	return newSRTStatsFromStructure(s)
 }
 
-func newPipeline(hwAccel bool, d *daemonConfig) (*pipeline, error) {
+func newPipeline(d *daemonConfig) (*pipeline, error) {
 	p := &pipeline{}
 
 	p.outputCaps = caps1920x1080p30
@@ -84,11 +84,30 @@ func newPipeline(hwAccel bool, d *daemonConfig) (*pipeline, error) {
 
 	// TODO(hugo): to much redundancy here. find a way to reduce err checking boilerplate
 
-	p.camSrc, err = newSourceBin("cam", d.sourceCam, d.sourceCamOpts, p.camSrcCaps)
+	switch d.sourceCam {
+	case "videotestsrc":
+		p.camSrc, err = newVideoTestSourceBin("cam", videoPatternSMPTE, p.camSrcCaps)
+	case "v4l2src":
+		p.camSrc, err = newV4L2SourceBin("cam", d.sourceCamOpts, p.camSrcCaps)
+	case "decklinkvideosrc":
+		p.camSrc, err = newDecklinkVideoSourceBin("cam", d.sourceCamOpts, p.camSrcCaps)
+	default:
+		return nil, errors.New("invalid source element factory name for camera channel")
+	}
 	if err != nil {
 		return nil, err
 	}
-	p.presentSrc, err = newSourceBin("present", d.sourcePresent, d.sourcePresentOpts, p.presentSrcCaps)
+	
+	switch d.sourcePresent {
+	case "videotestsrc":
+		p.presentSrc, err = newVideoTestSourceBin("present", videoPatternSMPTE, p.presentSrcCaps)
+	case "v4l2src":
+		p.presentSrc, err = newV4L2SourceBin("present", d.sourcePresentOpts, p.presentSrcCaps)
+	case "decklinkvideosrc":
+		p.presentSrc, err = newDecklinkVideoSourceBin("present", d.sourcePresentOpts, p.presentSrcCaps)
+	default:
+		return nil, errors.New("invalid source element factory name for presentation channel")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +117,8 @@ func newPipeline(hwAccel bool, d *daemonConfig) (*pipeline, error) {
 		p.audioSrc, err = newAudioTestSourceBin("master", p.audioCaps)
 	case "alsasrc":
 		p.audioSrc, err = newALSASourceBin("master", d.sourceAudioOpts, p.audioCaps)
-
+	case "decklinkaudiosrc":
+		p.audioSrc, err = newDecklinkAudioSourceBin("master", d.sourceAudioOpts, p.audioCaps)
 	}
 	if err != nil {
 		return nil, err
@@ -117,7 +137,7 @@ func newPipeline(hwAccel bool, d *daemonConfig) (*pipeline, error) {
 		return nil, err
 	}
 
-	p.muxerPresent, err = newMPEGTSMuxerBin("muxer_present")
+	p.muxerPresent, err = newMPEGTSMuxerBin("muxer_present", d.videoEncBitrateKbps, d.audioEncBitrateKbps, d.hwAccel)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +147,7 @@ func newPipeline(hwAccel bool, d *daemonConfig) (*pipeline, error) {
 	}
 	p.srtPresentSink.Element.SetProperty("name", "sink_present")
 
-	p.muxerCam, err = newMPEGTSMuxerBin("muxer_cam")
+	p.muxerCam, err = newMPEGTSMuxerBin("muxer_cam", d.videoEncBitrateKbps, d.audioEncBitrateKbps, d.hwAccel)
 	if err != nil {
 		return nil, err
 	}
@@ -140,21 +160,24 @@ func newPipeline(hwAccel bool, d *daemonConfig) (*pipeline, error) {
 	// Scaling and compositng on GPU results in a big load reduction
 	// on the CPU.
 	// Keep buffers in VRAM between postproc and compositor
-	if hwAccel {
+	// TODO(hugo): Move into bins config
+	outputComp := p.outputCaps
+	if d.hwAccel {
 		p.presentCompCaps.Mimetype = "video/x-raw(memory:VAMemory)"
 		p.camCompCaps.Mimetype = "video/x-raw(memory:VAMemory)"
+		outputComp.Mimetype = "video/x-raw(memory:VAMemory)"
 	}
 	p.compositor, err = newCompositorBin("compositor", combinedViewConfig{
-		OutputCaps:       p.outputCaps,
+		OutputCaps:       outputComp,
 		PresentationCaps: p.presentCompCaps,
 		CameraCaps:       p.camCompCaps,
-		HwAccel:          hwAccel,
+		HwAccel:          d.hwAccel,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	p.muxerCompositor, err = newMPEGTSMuxerBin("muxer_comp")
+	p.muxerCompositor, err = newMPEGTSMuxerBin("muxer_comp", d.videoEncBitrateKbps, d.audioEncBitrateKbps, d.hwAccel)
 	if err != nil {
 		return nil, err
 	}

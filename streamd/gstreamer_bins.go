@@ -77,21 +77,6 @@ func (c *audioCapsFilter) string() string {
 	return fmt.Sprintf("%s,channels=%d,rate=%d", c.Mimetype, c.Channels, c.Rate)
 }
 
-func newSourceBin(name string, factory string, properties string, caps videoCapsFilter) (*gst.Bin, error) {
-	// TODO(hugo): Consider constructing the bin manually
-	desc := fmt.Sprintf("%s name=%s_%s %s ! capsfilter name=capsfilter_%s caps=%s", factory, factory, name, properties, name, caps.string())
-
-	// Automatically create ghost-pads for all unlinked pads. In this case this
-	// is the capsfilter sink pad.
-	bin, err := gst.NewBinFromString(desc, true)
-	if err != nil {
-		return nil, err
-	}
-	bin.Element.SetProperty("name", name)
-
-	return bin, nil
-}
-
 // Creates a VideoTestSourceBin with a single sink ghost-pad
 func newVideoTestSourceBin(name string, pattern videoPattern, caps videoCapsFilter) (*gst.Bin, error) {
 	desc := fmt.Sprintf("videotestsrc name=videotestsrc_%s pattern=%d ! capsfilter name=capsfilter_%s caps=%s", name, pattern, name, caps.string())
@@ -108,13 +93,33 @@ func newVideoTestSourceBin(name string, pattern videoPattern, caps videoCapsFilt
 }
 
 // Creates a V4L2SourceBin with a single sink ghost-pad
-func newV4L2SourceBin(name string, device string, caps videoCapsFilter) (*gst.Bin, error) {
+func newV4L2SourceBin(name string, opts string, caps videoCapsFilter) (*gst.Bin, error) {
 	desc := fmt.Sprintf(
-		"v4l2src name=v4l2src_%s device=%s ! videoconvertscale name=videoconvertscale_%s ! capsfilter name=capsfilter_%s caps=%s",
+		"v4l2src name=v4l2src_%s %s ! video/x-raw,width=1920,height=1080 ! queue ! videoconvertscale name=videoconvertscale_%s ! capsfilter name=capsfilter_%s caps=%s",
 		name,
-		device,
+		opts,
 		name,
 		name,
+		caps.string(),
+	)
+	bin, err := gst.NewBinFromString(desc, true)
+	bin.Element.SetProperty("name", name)
+	return bin, err
+}
+
+func newDecklinkVideoSourceBin(name string, opts string, caps videoCapsFilter) (*gst.Bin, error) {
+	decklinkvideosrcName := "decklinkvideosrc_" + name
+	videoconvertscaleName := "videoconvertscale_" + name
+	videorateName := "videorate_" + name
+	capsfilterName := "capsfilter_" + name
+
+	desc := fmt.Sprintf(
+		"decklinkvideosrc name=%s %s ! videoconvertscale name=%s ! videorate name=%s ! capsfilter name=%s caps=%s",
+		decklinkvideosrcName,
+		opts,
+		videoconvertscaleName,
+		videorateName,
+		capsfilterName,
 		caps.string(),
 	)
 	bin, err := gst.NewBinFromString(desc, true)
@@ -158,6 +163,31 @@ func newALSASourceBin(name string, opts string, caps audioCapsFilter) (*gst.Bin,
 		audioconvertName,
 		audioresampleName,
 		audiorateName,
+		capsfilterName,
+		caps.string(),
+		queue1Name,
+	)
+	bin, err := gst.NewBinFromString(desc, true)
+	if err != nil {
+		return nil, err
+	}
+	bin.Element.SetProperty("name", name)
+	return bin, err
+}
+
+func newDecklinkAudioSourceBin(name string, opts string, caps audioCapsFilter) (*gst.Bin, error) {
+	decklinkaudiosrcName := "decklinkaudiosrc_" + name
+	queue0Name := "queue0_" + name
+	audioconvertName := "audioconvert_" + name
+	capsfilterName := "capsfilter_" + name
+	queue1Name := "queue1_" + name
+
+	desc := fmt.Sprintf(
+		"decklinkaudiosrc name=%s %s ! queue name=%s ! audioconvert name=%s ! capsfilter name=%s caps=%s ! queue name=%s",
+		decklinkaudiosrcName,
+		opts,
+		queue0Name,
+		audioconvertName,
 		capsfilterName,
 		caps.string(),
 		queue1Name,
@@ -368,18 +398,32 @@ func new1x3SplitterBin(name string) (*gst.Bin, error) {
 	return bin, nil
 }
 
-func newMPEGTSMuxerBin(name string) (*gst.Bin, error) {
+func newMPEGTSMuxerBin(name string, h264Bitrate int, aacBitrate int, hwAccel bool) (*gst.Bin, error) {
 	audioQueueName := "queue_audio_" + name
 	videoQueueName := "queue_video_" + name
 	aacEncName := "avenc_aac_" + name
-	h264EncName := "x264enc_" + name
 	muxName := "mpegtsmux_" + name
-	muxDesc := "mpegtsmux name=" + muxName
-	audioQueueDesc := fmt.Sprintf("queue name=%s ! avenc_aac name=%s ! %s.", audioQueueName, aacEncName, muxName)
-	// FIXME(hugo): changing to vah264enc results in h264 probing errors. It seems like vah264enc is not setting
-	// the correct codec metadata in the capabilities
-	// Check if this is still the case in GStreamer upstream, and file a bug
-	videoQueueDesc := fmt.Sprintf("queue name=%s ! x264enc name=%s ! %s.", videoQueueName, h264EncName, muxName)
+	muxDesc := "matroskamux name=" + muxName
+
+	h264enc := "x264enc tune=zerolatency"
+	if hwAccel {
+		h264enc = "vah264enc rate-control=cbr"
+	}
+
+	audioQueueDesc := fmt.Sprintf(
+		"queue name=%s ! avenc_aac name=%s bitrate=%d ! %s.",
+		audioQueueName,
+		aacEncName,
+		aacBitrate * 1000,
+		muxName,
+	)
+	videoQueueDesc := fmt.Sprintf(
+		"queue name=%s ! %s bitrate=%d ! video/x-h264,pixel-aspect-ratio=1/1,format=high ! h264parse config-interval=-1 ! %s.",
+		videoQueueName,
+		h264enc,
+		h264Bitrate,
+		muxName,
+	)
 
 	bin, err := gst.NewBinFromString(muxDesc+" "+audioQueueDesc+" "+videoQueueDesc, false)
 	if err != nil {
