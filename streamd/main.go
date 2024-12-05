@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"sync"
-	"time"
 
 	"github.com/go-gst/go-glib/glib"
 	"github.com/go-gst/go-gst/gst"
@@ -167,15 +166,10 @@ func main() {
 	// floating around and move outside runPipeline
 	go d.metricsProcess(ctx)
 
-	// bridge the mainloop with our go context
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			// this is essentially what g_main_loop_run does with some locking overhead
-			d.mainloop.GetContext().Iteration(false)
-			time.Sleep(time.Millisecond * 50)
-		}
-	}
+	go func() {
+		<-ctx.Done() // Wait until the context is cancelled
+		// When the context is cancelled, break out of the main loop
+		d.mainloop.Quit()
+	}()
+	d.mainloop.Run()
 }
