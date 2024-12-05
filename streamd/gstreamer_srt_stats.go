@@ -1,10 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"net"
 	"time"
 	"unsafe"
 
+	"github.com/go-gst/go-glib/glib"
 	"github.com/go-gst/go-gst/gst"
 )
 
@@ -68,7 +71,8 @@ type srtCallerStats struct {
 
 	negotiatedLatencyMS int
 
-	// callerAddress net.IP
+	callerAddress net.IP
+	callerPort    uint16
 }
 
 // Retrieve value from name and convert it to the correct time (known at compile time)
@@ -146,6 +150,19 @@ func (s *srtStats) convertCallerStats(arr []interface{}) error {
 		name := gs.Name()
 		if name != srtStatsMimetype {
 			return fmt.Errorf("struct has wrong mimetype '%s'", name)
+		}
+
+		socketAddress, err := gs.GetValue("caller-address")
+		if err != nil {
+			return err
+		}
+		socketAddressObj, ok := socketAddress.(*glib.Object)
+		if ok != true {
+			return errors.New("caller-address is not a glib object")
+		}
+		sc.callerAddress, sc.callerPort, err = inetSocketAddressIP(socketAddressObj.Unsafe())
+		if err != nil {
+			return err
 		}
 
 		intProps := []struct {
