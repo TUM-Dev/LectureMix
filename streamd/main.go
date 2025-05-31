@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 
 	"github.com/go-gst/go-glib/glib"
@@ -17,12 +20,17 @@ import (
 type daemonConfig struct {
 	listenHTTP string
 
-	// srt listening URI for combined stream
-	listenCombSRT string
-	// srt listening URI for presentation stream
-	listenPresentSRT string
-	// srt listening URI for camera stream
-	listenCamSRT string
+	// cidr containing ip to listen on
+	listenCidr string
+	// srt listening port for combined stream
+	combPort string
+	// srt listening port for presentation stream
+	presPort string
+	// srt listening port for camera stream
+	camPort string
+
+	// ip to listen on
+	listenAddr string
 
 	// the GStreamer factory name for the presentation source element
 	sourcePresent string
@@ -129,11 +137,11 @@ func (d *daemon) runPipeline() error {
 func main() {
 	d := &daemon{}
 
-	flag.StringVar(&d.listenHTTP, "listen-http", ":8080", "Address at which to listen for HTTP requests")
-	// See https://github.com/hwangsaeul/libsrt/blob/master/docs/srt-live-transmit.md for more information on SRT URIs
-	flag.StringVar(&d.listenCombSRT, "listen-comb-srt", "srt://[::]:7000?mode=listener", "SRT listing address for combined stream")
-	flag.StringVar(&d.listenPresentSRT, "listen-present-srt", "srt://[::]:7001?mode=listener", "SRT listing address for presentation stream")
-	flag.StringVar(&d.listenCamSRT, "listen-cam-srt", "srt://[::]:7002?mode=listener", "SRT listing address for camera stream")
+	flag.StringVar(&d.listenHTTP, "http-port", "8080", "Port at which to listen for HTTP requests")
+	flag.StringVar(&d.listenCidr, "listen-cidr", "", "CIDR containing Address to listen for all srt requests. E.g. 100.64.0.0/10 for tailnets. If unset, [::] will be listened on.")
+	flag.StringVar(&d.combPort, "port-comb-srt", "7000", "SRT listing port for combined stream")
+	flag.StringVar(&d.presPort, "port-present-srt", "7001", "SRT listing port for presentation stream")
+	flag.StringVar(&d.camPort, "port-cam-srt", "7002", "SRT listing port for camera stream")
 	flag.StringVar(&d.sourcePresent, "source-present", "videotestsrc", "GStreamer element factory name for the presentation source")
 	flag.StringVar(&d.sourcePresentOpts, "source-present-opts", "", "GStreamer element properties for presentation source")
 	flag.StringVar(&d.sourceCam, "source-cam", "videotestsrc", "GStreamer element factory name for the camera source")
@@ -145,6 +153,23 @@ func main() {
 	flag.BoolVar(&d.hwAccel, "hw-accel", false, "Enable hardware acceleration and offload processing tasks onto the GPU or a DSP")
 	flag.Parse()
 
+	if d.listenCidr != "" {
+		_, cidr, err := net.ParseCIDR(d.listenCidr)
+		if err != nil {
+			klog.Fatalf("cannot parse cidr %s: %v", d.listenCidr, err)
+		}
+		ip, err := getIfaceIP(cidr)
+		if err != nil {
+			klog.Fatalf("unable to obtain ip to listen on matching prefix: %v", err)
+		}
+		d.listenAddr = ip.String()
+		if strings.Count(d.listenAddr, ":") >= 2 { // ipv6
+			d.listenAddr = "[" + d.listenAddr + "]"
+		}
+	} else {
+		d.listenAddr = "[::]"
+	}
+
 	d.mainloop = glib.NewMainLoop(glib.MainContextDefault(), false)
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
 
@@ -152,9 +177,9 @@ func main() {
 	h := &httpServer{d}
 	h.setupHTTPHandlers()
 
-	klog.Infof("listening for HTTP at %s", d.listenHTTP)
+	klog.Infof("listening for HTTP at %s:%s", d.listenAddr, d.listenHTTP)
 	go func() {
-		if err := http.ListenAndServe(d.listenHTTP, nil); err != nil {
+		if err := http.ListenAndServe(fmt.Sprintf("%s:%s", d.listenAddr, d.listenHTTP), nil); err != nil {
 			klog.Errorf("HTTP listen failed: %v", err)
 		}
 	}()
@@ -172,4 +197,31 @@ func main() {
 		d.mainloop.Quit()
 	}()
 	d.mainloop.Run()
+}
+
+// getIfaceIP returns the first IP address available on the system that is within cidr or an error if none is found.
+func getIfaceIP(cidr *net.IPNet) (net.IP, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	for _, i := range ifaces {
+		addrs, err := i.Addrs()
+		if err != nil {
+			return nil, err
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if cidr.Contains(ip) {
+				return ip, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("no interface in CIDR %s found", cidr)
 }
