@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/go-gst/go-gst/gst"
 )
@@ -97,7 +98,7 @@ func newPipeline(d *daemonConfig) (*pipeline, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	switch d.sourcePresent {
 	case "videotestsrc":
 		p.presentSrc, err = newVideoTestSourceBin("present", videoPatternSMPTE, p.presentSrcCaps)
@@ -141,7 +142,7 @@ func newPipeline(d *daemonConfig) (*pipeline, error) {
 	if err != nil {
 		return nil, err
 	}
-	p.srtPresentSink, err = newSRTSink("sink_present", d.listenPresentSRT)
+	p.srtPresentSink, err = newSRTSink("sink_present", fmt.Sprintf("srt://%s:%s?mode=listener", d.listenAddr, d.presPort))
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +152,7 @@ func newPipeline(d *daemonConfig) (*pipeline, error) {
 	if err != nil {
 		return nil, err
 	}
-	p.srtCamSink, err = newSRTSink("sink_cam", d.listenCamSRT)
+	p.srtCamSink, err = newSRTSink("sink_cam", fmt.Sprintf("srt://%s:%s?mode=listener", d.listenAddr, d.camPort))
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +183,7 @@ func newPipeline(d *daemonConfig) (*pipeline, error) {
 		return nil, err
 	}
 
-	p.srtCompositorSink, err = newSRTSink("sink_combined", d.listenCombSRT)
+	p.srtCompositorSink, err = newSRTSink("sink_combined", fmt.Sprintf("srt://%s:%s?mode=listener", d.listenAddr, d.combPort))
 	if err != nil {
 		return nil, err
 	}
