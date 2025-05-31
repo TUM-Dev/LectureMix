@@ -81,38 +81,47 @@ Take a look at `nix.shell` in the repository root for a detailed list.
 
 The following flags configure the streamd daemon:
 
-	-listen-http string
-	    Address to listen for HTTP requests. Defaults to ":8080".
+	-audio-enc-bitrate int
+		Video encoding bitrate in Kbps (default 96)
 
-	-listen-comb-srt string
-	    SRT URI for receiving the combined stream. Defaults to "srt://[::]:7000?mode=listener".
-
-	-listen-present-srt string
-	    SRT URI for receiving the presentation stream. Defaults to "srt://[::]:7001?mode=listener".
-
-	-listen-cam-srt string
-	    SRT URI for receiving the camera stream. Defaults to "srt://[::]:7002?mode=listener".
-
-	-source-present string
-	    GStreamer factory name for the presentation source. Defaults to "videotestsrc".
-
-	-source-present-opts string
-	    Properties for configuring the presentation source. Defaults to an empty string.
-
-	-source-cam string
-	    GStreamer factory name for the camera source. Defaults to "videotestsrc".
-
-	-source-cam-opts string
-	    Properties for configuring the camera source. Defaults to an empty string.
-
-	-source-audio string
-	    GStreamer factory name for the audio source. Defaults to "audiotestsrc".
-
-	-source-audio-opts string
-	    Properties for configuring the audio source. Defaults to an empty string.
+	-http-port string
+		Port at which to listen for HTTP requests (default "8080")
 
 	-hw-accel
-	    Enables hardware acceleration, offloading processing tasks to the GPU using VA-API. Defaults to false.
+        Enable hardware acceleration and offload processing tasks onto the GPU or a DSP
+
+	-port-cam-srt string
+		SRT listing port for camera stream (default "7002")
+
+	-port-comb-srt string
+		SRT listing port for combined stream (default "7000")
+
+	-port-present-srt string
+		SRT listing port for presentation stream (default "7001")
+
+	-source-audio string
+		GStreamer element factory name for the audio source (default "audiotestsrc")
+
+	-source-audio-opts string
+		GStreamer element properties for audio source
+
+	-source-cam string
+		GStreamer element factory name for the camera source (default "videotestsrc")
+
+	-source-cam-opts string
+		GStreamer element properties for camera source
+
+	-source-present string
+		GStreamer element factory name for the presentation source (default "videotestsrc")
+
+	-source-present-opts string
+		GStreamer element properties for presentation source
+
+	-listen-cidr string
+		CIDR containing Address to listen for all srt requests. E.g. 100.64.0.0/10 for tailnets. If unset, [::] will be listened on.
+
+	-video-enc-bitrate int
+		Video encoding bitrate in Kbps (default 6000)
 
 For details on SRT URIs, see: https://github.com/hwangsaeul/libsrt/blob/master/docs/srt-live-transmit.md.
 
