@@ -266,9 +266,11 @@ func newCompositorBin(name string, config combinedViewConfig) (*gst.Bin, error) 
 	queueSink1Name := "queue_sink_1_" + name
 	capsfilterSink0Name := "capsfilter_sink_0_" + name
 	capsfilterSink1Name := "capsfilter_sink_1_" + name
+    capsfilterSink2Name := "capsfilter_sink_2_" + name
+    videoTestSrcSink2Name := "videotestsrc_sink_2_" + name
 
 	comp_desc := fmt.Sprintf(
-		"%s name=%s sink_1::xpos=%d ! capsfilter name=%s caps=%s",
+		"%s name=%s sink_1::xpos=%d sink_2::zorder=0 ! capsfilter name=%s caps=%s",
 		comp,
 		compName,
 		sink1_xpos,
@@ -293,9 +295,17 @@ func newCompositorBin(name string, config combinedViewConfig) (*gst.Bin, error) 
 		config.CameraCaps.string(),
 		compName,
 	)
+	background_desc := fmt.Sprintf(
+		"videotestsrc name=%s pattern=black ! capsfilter name=%s caps=\"video/x-raw,width=%d,height=%d\" ! %s.sink_2",
+        videoTestSrcSink2Name,
+        capsfilterSink2Name,
+        config.OutputCaps.Width,
+        config.OutputCaps.Height,
+		compName,
+	)
 
 	// Do not automatically create Ghostpads, as sink ghost-pads are not configured correctly.
-	bin, err := gst.NewBinFromString(comp_desc+" "+sink0_desc+" "+sink1_desc, false)
+	bin, err := gst.NewBinFromString(comp_desc+" "+sink0_desc+" "+sink1_desc+" "+background_desc, false)
 	if err != nil {
 		return nil, err
 	}
