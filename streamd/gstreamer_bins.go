@@ -416,9 +416,9 @@ func newMPEGTSMuxerBin(name string, h264Bitrate int, aacBitrate int, hwAccel boo
 	muxName := "mpegtsmux_" + name
 	muxDesc := "matroskamux name=" + muxName
 
-	h264enc := "x264enc tune=zerolatency pass=0" // pass=0 is cbr
+	h264enc := "x264enc tune=zerolatency pass=17" // pass=17 is vbr encoding pass1
 	if hwAccel {
-		h264enc = "vah264enc rate-control=cbr"
+		h264enc = "vah264enc rate-control=vbr"
 	}
 
 	audioQueueDesc := fmt.Sprintf(
