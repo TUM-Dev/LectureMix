@@ -422,7 +422,7 @@ func newMPEGTSMuxerBin(name string, h264Bitrate int, aacBitrate int, hwAccel boo
 	}
 
 	audioQueueDesc := fmt.Sprintf(
-		"queue name=%s ! fdkaacenc name=%s bitrate=%d rate-control=cbr ! %s.",
+		"queue name=%s ! fdkaacenc name=%s bitrate=%d rate-control=vbr ! %s.",
 		audioQueueName,
 		aacEncName,
 		aacBitrate * 1000,
