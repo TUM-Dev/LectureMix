@@ -1,0 +1,5 @@
+[book]
+authors = ["Hugo Melder"]
+language = "en"
+src = "src"
+title = "The LectureMix Book"
