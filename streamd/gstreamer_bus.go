@@ -24,6 +24,16 @@ func (d *daemon) registerBusWatch() bool {
 
 	return p.GetBus().AddWatch(func(msg *gst.Message) bool {
 		switch msg.Type() {
+		case gst.MessageStateChanged:
+			if msg.Source() == d.pipeline.name {
+				_, newState := msg.ParseStateChanged()
+				stateString := newState.String()
+
+				d.mu.Lock()
+				d.pipeline.state = stateString
+				d.mu.Unlock()
+			}
+			klog.Info(msg)
 		case gst.MessageEOS: // When end-of-stream is received stop the main loop
 			p.BlockSetState(gst.StateNull)
 			d.mainloop.Quit()
@@ -34,6 +44,7 @@ func (d *daemon) registerBusWatch() bool {
 			d.mu.Lock()
 			d.metrics.pipelineStats.warnings += 1
 			d.mu.Unlock()
+			klog.Info(msg)
 		// When buffers arrive late in the sink, i.e. when their running-time is
 		// smaller than that of the clock, we have a QoS problem
 		// https://gstreamer.freedesktop.org/documentation/plugin-development/advanced/qos.html?gi-language=c

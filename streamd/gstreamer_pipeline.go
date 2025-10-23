@@ -16,8 +16,15 @@ var capsStereo48Khz = audioCapsFilter{Mimetype: "audio/x-raw", Channels: 2, Rate
 
 // pipeline is the main AV processing pipeline
 type pipeline struct {
+	name        string
 	constructed bool
 	pipeline    *gst.Pipeline
+
+	// State is updated when a STATE_CHANGE message for this pipeline is
+	// received on the GStreamer bus.
+	//
+	// See gstreamer_bus.go
+	state string
 
 	camSrc     *gst.Bin
 	presentSrc *gst.Bin
@@ -72,6 +79,8 @@ func getSRTStatistics(srtBin *gst.Bin) (*srtStats, error) {
 
 func newPipeline(d *daemonConfig) (*pipeline, error) {
 	p := &pipeline{}
+
+	p.name = "Pipeline"
 
 	p.outputCaps = caps1920x1080p30
 	p.presentSrcCaps = caps1920x1080p30
@@ -189,7 +198,7 @@ func newPipeline(d *daemonConfig) (*pipeline, error) {
 	}
 
 	// Create main pipelines and link bins
-	p.pipeline, err = gst.NewPipeline("Pipeline")
+	p.pipeline, err = gst.NewPipeline(p.name)
 	if err != nil {
 		return nil, err
 	}
