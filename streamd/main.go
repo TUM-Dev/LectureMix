@@ -72,6 +72,7 @@ type daemonState struct {
 type daemonController interface {
 	metricsSnapshot() metrics
 	graph(details gst.DebugGraphDetails) string
+	state() string
 	srtStatistics() ([]*srtStats, error)
 }
 
@@ -96,6 +97,16 @@ func (d *daemon) srtStatistics() ([]*srtStats, error) {
 	}
 
 	return []*srtStats{combStats, presentStats, camStats}, nil
+}
+
+func (d *daemon) state() string {
+	var state string
+
+	d.mu.Lock()
+	state = d.pipeline.state
+	d.mu.Unlock()
+
+	return state
 }
 
 // get a snapshot of the current metrics
