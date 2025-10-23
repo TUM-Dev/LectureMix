@@ -224,7 +224,24 @@ func (h *httpServer) graph(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/vnd.graphviz")
 }
 
+// Returns the state of the GStreamer pipeline
+//
+// Possible states are:
+// - PLAYING: Pipeline is up and running. Sinks accept and render data. Live sources produce data.
+// - PAUSED: Pipeline is set up but not actively processing data.
+// - READY
+// - NULL: Initial state after construction
+//
+// When implementing a simple status indicator, treat everything except PLAYING as 'inactive' or
+// as a degraded service. A working (live) pipeline should always be in the PLAYING state.
+func (h *httpServer) state(w http.ResponseWriter, _ *http.Request) {
+	state := h.daemonController.state()
+	w.Write([]byte(state))
+	w.Header().Add("Content-Type", "text/plain")
+}
+
 func (h *httpServer) setupHTTPHandlers() {
 	http.HandleFunc("/metrics", h.metrics)
 	http.HandleFunc("/graph", h.graph)
+	http.HandleFunc("/state", h.state)
 }
