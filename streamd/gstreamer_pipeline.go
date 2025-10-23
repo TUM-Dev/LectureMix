@@ -81,6 +81,7 @@ func newPipeline(d *daemonConfig) (*pipeline, error) {
 	p := &pipeline{}
 
 	p.name = "Pipeline"
+	p.state = gst.StateNull.String()
 
 	p.outputCaps = caps1920x1080p30
 	p.presentSrcCaps = caps1920x1080p30
