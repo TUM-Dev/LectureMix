@@ -69,7 +69,11 @@ type audioCapsFilter struct {
 	Mimetype string
 	Channels int
 	Rate     int
-	Format 	 string
+	Format   string
+}
+
+type audioParams struct {
+	Amplification float64
 }
 
 // Returns a description of the AudioCapsfilter instance that can be used in a
@@ -129,7 +133,7 @@ func newDecklinkVideoSourceBin(name string, opts string, caps videoCapsFilter) (
 }
 
 // Creates an AudioTestSourceBin with a single sink ghost-pad
-func newAudioTestSourceBin(name string, caps audioCapsFilter) (*gst.Bin, error) {
+func newAudioTestSourceBin(name string, caps audioCapsFilter, params audioParams) (*gst.Bin, error) {
 	desc := fmt.Sprintf("audiotestsrc name=audiotestsrc_%s ! capsfilter name=capsfilter_%s caps=%s",
 		name,
 		name,
@@ -146,7 +150,7 @@ func newAudioTestSourceBin(name string, caps audioCapsFilter) (*gst.Bin, error) 
 	return bin, err
 }
 
-func newALSASourceBin(name string, opts string, caps audioCapsFilter) (*gst.Bin, error) {
+func newALSASourceBin(name string, opts string, caps audioCapsFilter, params audioParams) (*gst.Bin, error) {
 	alsasrcName := "alsasrc_" + name
 	queue0Name := "queue0_" + name
 	audioconvertName := "audioconvert_" + name
@@ -157,7 +161,7 @@ func newALSASourceBin(name string, opts string, caps audioCapsFilter) (*gst.Bin,
 
 	// Isolating conversion, resampling, and timestamping to a new thread is necessary.
 	// Leaving out one queue results in clock problems.
-	desc := fmt.Sprintf("alsasrc name=%s %s ! queue name=%s ! audioconvert name=%s ! audioresample name=%s ! audiorate name=%s ! capsfilter name=%s caps=%s ! queue name=%s",
+	desc := fmt.Sprintf("alsasrc name=%s %s ! queue name=%s ! audioconvert name=%s ! audioresample name=%s ! audiorate name=%s ! capsfilter name=%s caps=%s ! audioamplify amplification=%f ! queue name=%s",
 		alsasrcName,
 		opts,
 		queue0Name,
@@ -166,6 +170,7 @@ func newALSASourceBin(name string, opts string, caps audioCapsFilter) (*gst.Bin,
 		audiorateName,
 		capsfilterName,
 		caps.string(),
+		params.Amplification,
 		queue1Name,
 	)
 	bin, err := gst.NewBinFromString(desc, true)
@@ -176,7 +181,7 @@ func newALSASourceBin(name string, opts string, caps audioCapsFilter) (*gst.Bin,
 	return bin, err
 }
 
-func newDecklinkAudioSourceBin(name string, opts string, caps audioCapsFilter) (*gst.Bin, error) {
+func newDecklinkAudioSourceBin(name string, opts string, caps audioCapsFilter, params audioParams) (*gst.Bin, error) {
 	decklinkaudiosrcName := "decklinkaudiosrc_" + name
 	queue0Name := "queue0_" + name
 	audioconvertName := "audioconvert_" + name
@@ -266,8 +271,8 @@ func newCompositorBin(name string, config combinedViewConfig) (*gst.Bin, error) 
 	queueSink1Name := "queue_sink_1_" + name
 	capsfilterSink0Name := "capsfilter_sink_0_" + name
 	capsfilterSink1Name := "capsfilter_sink_1_" + name
-    capsfilterSink2Name := "capsfilter_sink_2_" + name
-    videoTestSrcSink2Name := "videotestsrc_sink_2_" + name
+	capsfilterSink2Name := "capsfilter_sink_2_" + name
+	videoTestSrcSink2Name := "videotestsrc_sink_2_" + name
 
 	comp_desc := fmt.Sprintf(
 		"%s name=%s sink_1::xpos=%d sink_2::zorder=0 ! capsfilter name=%s caps=%s",
@@ -297,10 +302,10 @@ func newCompositorBin(name string, config combinedViewConfig) (*gst.Bin, error) 
 	)
 	background_desc := fmt.Sprintf(
 		"videotestsrc name=%s pattern=black ! capsfilter name=%s caps=\"video/x-raw,width=%d,height=%d\" ! %s.sink_2",
-        videoTestSrcSink2Name,
-        capsfilterSink2Name,
-        config.OutputCaps.Width,
-        config.OutputCaps.Height,
+		videoTestSrcSink2Name,
+		capsfilterSink2Name,
+		config.OutputCaps.Width,
+		config.OutputCaps.Height,
 		compName,
 	)
 
@@ -425,7 +430,7 @@ func newMPEGTSMuxerBin(name string, h264Bitrate int, aacBitrate int, hwAccel boo
 		"queue name=%s ! fdkaacenc name=%s bitrate=%d rate-control=vbr ! %s.",
 		audioQueueName,
 		aacEncName,
-		aacBitrate * 1000,
+		aacBitrate*1000,
 		muxName,
 	)
 	videoQueueDesc := fmt.Sprintf(

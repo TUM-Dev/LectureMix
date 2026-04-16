@@ -48,6 +48,8 @@ type daemonConfig struct {
 	videoEncBitrateKbps int
 	audioEncBitrateKbps int
 
+	audioAmplification float64
+
 	// whether to enable hardware acceleration in the filter graph
 	hwAccel bool
 }
@@ -150,6 +152,7 @@ func main() {
 	flag.StringVar(&d.sourceAudioOpts, "source-audio-opts", "", "GStreamer element properties for audio source")
 	flag.IntVar(&d.videoEncBitrateKbps, "video-enc-bitrate", 6000, "Video encoding bitrate in Kbps")
 	flag.IntVar(&d.audioEncBitrateKbps, "audio-enc-bitrate", 96, "Video encoding bitrate in Kbps")
+	flag.Float64Var(&d.audioAmplification, "audio-amplification", 1.0, "Audio amplifcation after conversion")
 	flag.BoolVar(&d.hwAccel, "hw-accel", false, "Enable hardware acceleration and offload processing tasks onto the GPU or a DSP")
 	flag.Parse()
 

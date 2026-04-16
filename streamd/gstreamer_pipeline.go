@@ -113,13 +113,15 @@ func newPipeline(d *daemonConfig) (*pipeline, error) {
 		return nil, err
 	}
 
+	audioParams := audioParams{Amplification: d.audioAmplification}
+
 	switch d.sourceAudio {
 	case "audiotestsrc":
-		p.audioSrc, err = newAudioTestSourceBin("master", p.audioCaps)
+		p.audioSrc, err = newAudioTestSourceBin("master", p.audioCaps, audioParams)
 	case "alsasrc":
-		p.audioSrc, err = newALSASourceBin("master", d.sourceAudioOpts, p.audioCaps)
+		p.audioSrc, err = newALSASourceBin("master", d.sourceAudioOpts, p.audioCaps, audioParams)
 	case "decklinkaudiosrc":
-		p.audioSrc, err = newDecklinkAudioSourceBin("master", d.sourceAudioOpts, p.audioCaps)
+		p.audioSrc, err = newDecklinkAudioSourceBin("master", d.sourceAudioOpts, p.audioCaps, audioParams)
 	}
 	if err != nil {
 		return nil, err
