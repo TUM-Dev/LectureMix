@@ -9,7 +9,6 @@ mkShell {
     gst_all_1.gst-plugins-base
     gst_all_1.gst-plugins-good
     gst_all_1.gst-libav # For avenc_aac
-    gst_all_1.gst-vaapi
 
     libcap
     go

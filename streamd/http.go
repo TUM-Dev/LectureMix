@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
 
 	"github.com/go-gst/go-gst/gst"
@@ -9,6 +10,126 @@ import (
 
 type httpServer struct {
 	daemonController
+	combPort string
+	presPort string
+	camPort  string
+	lb       *logBuffer
+}
+
+type indexData struct {
+	Warnings       uint64
+	QosEvents      map[string]uint64
+	CompCallers    int
+	PresentCallers int
+	CamCallers     int
+	LoadOne        float64
+	LoadFive       float64
+	LoadFifteen    float64
+	MemUsedMB      int64
+	MemFreeMB      int64
+	CompPort       string
+	PresentPort    string
+	CamPort        string
+}
+
+var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>streamd</title>
+<style>
+* { box-sizing: border-box; }
+body { font-family: monospace; max-width: 860px; margin: 2em auto; padding: 0 1em; color: #222; }
+h1 { margin-bottom: 0.2em; }
+h2 { font-size: 1em; margin: 1.4em 0 0.4em; text-transform: uppercase; letter-spacing: 0.05em; color: #555; }
+table { border-collapse: collapse; width: 100%; margin-bottom: 0.5em; }
+th, td { padding: 5px 10px; text-align: left; border: 1px solid #ddd; }
+th { background: #f5f5f5; font-weight: normal; width: 40%; }
+.ok { color: #2a2; }
+.warn { color: #c80; }
+.nav { margin-top: 2em; }
+.nav a { margin-right: 1em; }
+button { padding: 6px 16px; cursor: pointer; font-family: monospace; }
+.danger { background: #fee; border: 1px solid #c00; color: #c00; }
+.danger:hover { background: #c00; color: #fff; }
+</style>
+</head>
+<body>
+<h1>streamd</h1>
+
+<h2>Pipeline</h2>
+<table>
+<tr><th>State</th><td><span class="ok">&#9679; running</span></td></tr>
+<tr><th>Warnings</th><td{{if .Warnings}} class="warn"{{end}}>{{.Warnings}}</td></tr>
+{{if .QosEvents -}}
+<tr><th>QoS events</th><td class="warn">{{range $k, $v := .QosEvents}}{{$k}}: {{$v}}<br>{{end}}</td></tr>
+{{- end}}
+</table>
+
+<h2>SRT Sinks</h2>
+<table>
+<tr><th>Combined (port {{.CompPort}})</th><td>{{.CompCallers}} caller(s)</td></tr>
+<tr><th>Presentation (port {{.PresentPort}})</th><td>{{.PresentCallers}} caller(s)</td></tr>
+<tr><th>Camera (port {{.CamPort}})</th><td>{{.CamCallers}} caller(s)</td></tr>
+</table>
+
+<h2>System</h2>
+<table>
+<tr><th>Load average (1/5/15 min)</th><td>{{printf "%.2f" .LoadOne}} / {{printf "%.2f" .LoadFive}} / {{printf "%.2f" .LoadFifteen}}</td></tr>
+<tr><th>Memory used</th><td>{{.MemUsedMB}} MB</td></tr>
+<tr><th>Memory available</th><td>{{.MemFreeMB}} MB</td></tr>
+</table>
+
+<h2>Actions</h2>
+<form method="POST" action="/restart" onsubmit="return confirm('Restart the pipeline?')">
+  <button type="submit" class="danger">Restart pipeline</button>
+</form>
+
+<div class="nav">
+  <a href="/logs">/logs</a>
+  <a href="/metrics">/metrics</a>
+  <a href="/graph?details=states">/graph</a>
+</div>
+</body>
+</html>
+`))
+
+func (h *httpServer) handleIndex(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	m := h.metricsSnapshot()
+	data := indexData{
+		Warnings:       m.pipelineStats.warnings,
+		QosEvents:      m.pipelineStats.qosEvents,
+		CompCallers:    len(m.compSinkStats.callers),
+		PresentCallers: len(m.presentSinkStats.callers),
+		CamCallers:     len(m.camSinkStats.callers),
+		LoadOne:        m.loadAvg.One,
+		LoadFive:       m.loadAvg.Five,
+		LoadFifteen:    m.loadAvg.Fifteen,
+		MemUsedMB:      int64(m.mem.MemTotal-m.mem.MemFree-m.mem.Buffers-m.mem.Cached) / 1024,
+		MemFreeMB:      int64(m.mem.MemFree+m.mem.Buffers+m.mem.Cached) / 1024,
+		CompPort:       h.combPort,
+		PresentPort:    h.presPort,
+		CamPort:        h.camPort,
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	indexTmpl.Execute(w, data)
+}
+
+func (h *httpServer) handleRestart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := h.daemonController.restart(); err != nil {
+		http.Error(w, fmt.Sprintf("restart failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func writeSRTStatsMeta(w http.ResponseWriter) {
@@ -225,6 +346,9 @@ func (h *httpServer) graph(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *httpServer) setupHTTPHandlers() {
+	http.HandleFunc("/", h.handleIndex)
+	http.HandleFunc("/logs", h.handleLogs)
 	http.HandleFunc("/metrics", h.metrics)
 	http.HandleFunc("/graph", h.graph)
+	http.HandleFunc("/restart", h.handleRestart)
 }
