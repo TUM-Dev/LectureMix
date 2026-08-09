@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -75,6 +76,7 @@ type daemonController interface {
 	metricsSnapshot() metrics
 	graph(details gst.DebugGraphDetails) string
 	srtStatistics() ([]*srtStats, error)
+	restart() error
 }
 
 func (d *daemon) srtStatistics() ([]*srtStats, error) {
@@ -136,6 +138,28 @@ func (d *daemon) runPipeline() error {
 	return nil
 }
 
+func (d *daemon) restart() error {
+	d.mu.Lock()
+	oldGstPipeline := d.pipeline.pipeline
+	d.mu.Unlock()
+
+	oldGstPipeline.BlockSetState(gst.StateNull)
+
+	newP, err := newPipeline(&d.daemonConfig)
+	if err != nil {
+		return err
+	}
+
+	d.mu.Lock()
+	d.pipeline = newP
+	d.metrics.pipelineStats = newPipelineStats()
+	d.mu.Unlock()
+
+	d.registerBusWatch()
+	newP.pipeline.SetState(gst.StatePlaying)
+	return nil
+}
+
 func main() {
 	d := &daemon{}
 
@@ -154,6 +178,7 @@ func main() {
 	flag.IntVar(&d.audioEncBitrateKbps, "audio-enc-bitrate", 96, "Video encoding bitrate in Kbps")
 	flag.Float64Var(&d.audioAmplification, "audio-amplification", 1.0, "Audio amplifcation after conversion")
 	flag.BoolVar(&d.hwAccel, "hw-accel", false, "Enable hardware acceleration and offload processing tasks onto the GPU or a DSP")
+	klog.InitFlags(nil) // register klog flags with flag.CommandLine before parsing
 	flag.Parse()
 
 	if d.listenCidr != "" {
@@ -173,11 +198,24 @@ func main() {
 		d.listenAddr = "[::]"
 	}
 
+	lb := newLogBuffer()
+	// klog defaults to logtostderr=true, which writes directly to os.Stderr
+	// and bypasses the file sinks that SetOutput replaces. Disable it so all
+	// log lines go through our MultiWriter (which still writes to os.Stderr).
+	flag.Set("logtostderr", "false")
+	klog.SetOutput(io.MultiWriter(os.Stderr, lb))
+
 	d.mainloop = glib.NewMainLoop(glib.MainContextDefault(), false)
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
 
 	// Create and start HTTP server
-	h := &httpServer{d}
+	h := &httpServer{
+		daemonController: d,
+		combPort:         d.combPort,
+		presPort:         d.presPort,
+		camPort:          d.camPort,
+		lb:               lb,
+	}
 	h.setupHTTPHandlers()
 
 	klog.Infof("listening for HTTP at %s:%s", d.listenAddr, d.listenHTTP)
