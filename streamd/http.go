@@ -338,9 +338,16 @@ func (h *httpServer) graph(w http.ResponseWriter, r *http.Request) {
 		details = gst.DebugGraphShowStates
 	}
 
-	dot := h.daemonController.graph(details)
-	w.Write([]byte(dot))
-	w.Header().Add("Content-Type", "text/vnd.graphviz")
+	dotString := h.daemonController.graph(details)
+	svg, err := RenderDOTToSVG(dotString)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	w.Write(svg)
+	w.Header().Add("Content-Type", "image/svg+xml")
 }
 
 func (h *httpServer) setupHTTPHandlers() {
