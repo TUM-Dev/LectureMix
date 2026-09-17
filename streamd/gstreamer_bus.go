@@ -55,3 +55,9 @@ func (d *daemon) registerBusWatch() bool {
 		return true
 	})
 }
+
+func (d *daemon) unregisterAllBusWatches() {
+	p := d.pipeline.pipeline
+
+	p.GetBus().RemoveWatch()
+}

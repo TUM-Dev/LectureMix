@@ -77,6 +77,7 @@ type daemonController interface {
 	graph(details gst.DebugGraphDetails) string
 	srtStatistics() ([]*srtStats, error)
 	restart() error
+	config() *daemonConfig
 }
 
 func (d *daemon) srtStatistics() ([]*srtStats, error) {
@@ -119,8 +120,6 @@ func (d *daemon) graph(details gst.DebugGraphDetails) string {
 }
 
 func (d *daemon) runPipeline() error {
-	gst.Init(&os.Args)
-
 	var err error
 	d.pipeline, err = newPipeline(&d.daemonConfig)
 	if err != nil {
@@ -138,29 +137,32 @@ func (d *daemon) runPipeline() error {
 	return nil
 }
 
-func (d *daemon) restart() error {
+func (d *daemon) stopPipeline() {
 	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	oldGstPipeline := d.pipeline.pipeline
-	d.mu.Unlock()
-
 	oldGstPipeline.BlockSetState(gst.StateNull)
+	d.unregisterAllBusWatches()
+}
 
-	newP, err := newPipeline(&d.daemonConfig)
+func (d *daemon) restart() error {
+	d.stopPipeline()
+	err := d.runPipeline()
 	if err != nil {
 		return err
 	}
 
-	d.mu.Lock()
-	d.pipeline = newP
-	d.metrics.pipelineStats = newPipelineStats()
-	d.mu.Unlock()
-
-	d.registerBusWatch()
-	newP.pipeline.SetState(gst.StatePlaying)
 	return nil
 }
 
+func (d *daemon) config() *daemonConfig {
+	return &d.daemonConfig
+}
+
 func main() {
+	gst.Init(&os.Args)
+
 	d := &daemon{}
 
 	flag.StringVar(&d.listenHTTP, "http-port", "8080", "Port at which to listen for HTTP requests")
@@ -211,9 +213,6 @@ func main() {
 	// Create and start HTTP server
 	h := &httpServer{
 		daemonController: d,
-		combPort:         d.combPort,
-		presPort:         d.presPort,
-		camPort:          d.camPort,
 		lb:               lb,
 	}
 	h.setupHTTPHandlers()

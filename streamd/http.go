@@ -10,10 +10,7 @@ import (
 
 type httpServer struct {
 	daemonController
-	combPort string
-	presPort string
-	camPort  string
-	lb       *logBuffer
+	lb *logBuffer
 }
 
 type indexData struct {
@@ -101,6 +98,7 @@ func (h *httpServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m := h.metricsSnapshot()
+	config := h.daemonController.config()
 	data := indexData{
 		Warnings:       m.pipelineStats.warnings,
 		QosEvents:      m.pipelineStats.qosEvents,
@@ -112,9 +110,9 @@ func (h *httpServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 		LoadFifteen:    m.loadAvg.Fifteen,
 		MemUsedMB:      int64(m.mem.MemTotal-m.mem.MemFree-m.mem.Buffers-m.mem.Cached) / 1024,
 		MemFreeMB:      int64(m.mem.MemFree+m.mem.Buffers+m.mem.Cached) / 1024,
-		CompPort:       h.combPort,
-		PresentPort:    h.presPort,
-		CamPort:        h.camPort,
+		CompPort:       config.combPort,
+		PresentPort:    config.presPort,
+		CamPort:        config.camPort,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	indexTmpl.Execute(w, data)
