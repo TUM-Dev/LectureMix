@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-gst/go-glib/glib"
 	"github.com/go-gst/go-gst/gst"
@@ -183,12 +184,14 @@ func main() {
 	klog.InitFlags(nil) // register klog flags with flag.CommandLine before parsing
 	flag.Parse()
 
+	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
+
 	if d.listenCidr != "" {
 		_, cidr, err := net.ParseCIDR(d.listenCidr)
 		if err != nil {
 			klog.Fatalf("cannot parse cidr %s: %v", d.listenCidr, err)
 		}
-		ip, err := getIfaceIP(cidr)
+		ip, err := waitForIfaceIP(ctx, cidr)
 		if err != nil {
 			klog.Fatalf("unable to obtain ip to listen on matching prefix: %v", err)
 		}
@@ -208,7 +211,6 @@ func main() {
 	klog.SetOutput(io.MultiWriter(os.Stderr, lb))
 
 	d.mainloop = glib.NewMainLoop(glib.MainContextDefault(), false)
-	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
 
 	// Create and start HTTP server
 	h := &httpServer{
@@ -237,6 +239,31 @@ func main() {
 		d.mainloop.Quit()
 	}()
 	d.mainloop.Run()
+}
+
+// waitForIfaceIP blocks until an IP matching cidr is found or ctx is cancelled.
+func waitForIfaceIP(ctx context.Context, cidr *net.IPNet) (net.IP, error) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	logged := false
+	for {
+		ip, err := getIfaceIP(cidr)
+		if err == nil {
+			return ip, nil
+		}
+
+		if !logged {
+			klog.Infof("Waiting for interface matching CIDR %s to come up...", cidr)
+			logged = true
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 // getIfaceIP returns the first IP address available on the system that is within cidr or an error if none is found.
