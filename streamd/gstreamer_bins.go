@@ -207,10 +207,11 @@ func newDecklinkAudioSourceBin(name string, opts string, caps audioCapsFilter, p
 }
 
 type combinedViewConfig struct {
-	OutputCaps       videoCapsFilter
-	CameraCaps       videoCapsFilter
-	PresentationCaps videoCapsFilter
-	HwAccel          bool
+	OutputCaps          videoCapsFilter
+	CameraCaps          videoCapsFilter
+	PresentationCaps    videoCapsFilter
+	HwAccel             bool
+	BackgroundImagePath string
 }
 
 func createGhostPad(elementName string, elementPad string, ghostPad string, bin *gst.Bin) error {
@@ -300,14 +301,25 @@ func newCompositorBin(name string, config combinedViewConfig) (*gst.Bin, error) 
 		config.CameraCaps.string(),
 		compName,
 	)
+
+	var overlay_desc string
+	if config.BackgroundImagePath != "" {
+		overlay_desc = "rsvgoverlay location=\"" + config.BackgroundImagePath + "\" ! videoconvert ! "
+	} else {
+		overlay_desc = ""
+	}
+
 	background_desc := fmt.Sprintf(
-		"videotestsrc name=%s pattern=black ! capsfilter name=%s caps=\"video/x-raw,width=%d,height=%d\" ! %s.sink_2",
+		"videotestsrc name=%s pattern=black ! capsfilter name=%s caps=\"video/x-raw,width=%d,height=%d\" ! videoconvert ! %s %s.sink_2",
 		videoTestSrcSink2Name,
 		capsfilterSink2Name,
 		config.OutputCaps.Width,
 		config.OutputCaps.Height,
+		overlay_desc,
 		compName,
 	)
+
+	println("lol: %s", background_desc)
 
 	// Do not automatically create Ghostpads, as sink ghost-pads are not configured correctly.
 	bin, err := gst.NewBinFromString(comp_desc+" "+sink0_desc+" "+sink1_desc+" "+background_desc, false)

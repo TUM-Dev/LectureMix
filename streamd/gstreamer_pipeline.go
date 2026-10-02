@@ -171,10 +171,11 @@ func newPipeline(d *daemonConfig) (*pipeline, error) {
 		outputComp.Mimetype = "video/x-raw(memory:VAMemory)"
 	}
 	p.compositor, err = newCompositorBin("compositor", combinedViewConfig{
-		OutputCaps:       outputComp,
-		PresentationCaps: p.presentCompCaps,
-		CameraCaps:       p.camCompCaps,
-		HwAccel:          d.hwAccel,
+		OutputCaps:          outputComp,
+		PresentationCaps:    p.presentCompCaps,
+		CameraCaps:          p.camCompCaps,
+		HwAccel:             d.hwAccel,
+		BackgroundImagePath: d.backgroundSvgPath,
 	})
 	if err != nil {
 		return nil, err
